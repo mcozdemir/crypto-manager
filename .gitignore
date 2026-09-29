@@ -7,7 +7,6 @@ __pycache__/
 
 # Çalışma anında üretilen dosyalar
 charts/
-signal_journal.db
 *.xlsx
 
 # Yedek / geçici klasörler
