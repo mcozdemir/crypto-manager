@@ -1,0 +1,18 @@
+# Python sanal ortamı ve önbellekler
+.venv/
+venv/
+__pycache__/
+*.pyc
+.matplotlib-cache/
+
+# Çalışma anında üretilen dosyalar
+charts/
+signal_journal.db
+*.xlsx
+
+# Yedek / geçici klasörler
+work/
+{charts,templates}/
+
+# macOS
+.DS_Store

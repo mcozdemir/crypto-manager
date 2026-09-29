@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kripto Formasyon Tarayıcı {{ '- ' + app_version if app_version else '' }}</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel-2: #1e2230;
+    --border: #2a2f3f;
+    --text: #e6e8ef;
+    --muted: #8b93a7;
+    --green: #26a69a;
+    --red: #ef5350;
+    --blue: #4f8ef7;
+    --amber: #f5a623;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 20px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 { font-size: 20px; margin: 0; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .controls label { font-size: 13px; color: var(--muted); margin-right: 4px; }
+  select, input[type=number] {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  button {
+    background: var(--blue);
+    color: white;
+    border: none;
+    padding: 9px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #exportBtn { background: var(--green); }
+
+  main { padding: 20px 28px 60px; max-width: 1400px; margin: 0 auto; }
+
+  .status-bar {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 20px;
+  }
+  .progress-outer {
+    background: var(--panel-2);
+    border-radius: 6px;
+    height: 8px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-inner {
+    background: linear-gradient(90deg, var(--blue), var(--green));
+    height: 100%;
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+  .status-msg { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab-btn {
+    background: var(--panel-2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 7px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .tab-btn.active { background: var(--blue); color: white; border-color: var(--blue); }
+
+  .view-nav { display: flex; gap: 8px; padding: 0 28px; border-bottom: 1px solid var(--border); }
+  .view-btn {
+    background: transparent; color: var(--muted); border: none; border-bottom: 2px solid transparent;
+    padding: 12px 6px; font-size: 14px; font-weight: 600; cursor: pointer; border-radius: 0;
+  }
+  .view-btn.active { color: var(--text); border-bottom-color: var(--blue); }
+
+  .form-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  input[type=text] {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 7px 10px; font-size: 13px;
+  }
+
+  .stat-cards { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .stat-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 20px; min-width: 130px; flex: 1;
+  }
+  .stat-card .num { font-size: 24px; font-weight: 700; }
+  .stat-card .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .stat-card.win .num { color: var(--green); }
+  .stat-card.loss .num { color: var(--red); }
+
+  .regime-banner {
+    border-radius: 12px; padding: 22px 26px; margin-bottom: 20px; border: 1px solid var(--border);
+  }
+  .regime-banner.bull { background: rgba(38,166,154,0.12); border-color: rgba(38,166,154,0.4); }
+  .regime-banner.bear { background: rgba(239,83,80,0.12); border-color: rgba(239,83,80,0.4); }
+  .regime-banner.neutral { background: rgba(139,147,167,0.10); border-color: var(--border); }
+  .regime-banner.mixed { background: rgba(245,166,35,0.12); border-color: rgba(245,166,35,0.4); }
+  .regime-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  .regime-banner.bull .regime-title { color: var(--green); }
+  .regime-banner.bear .regime-title { color: var(--red); }
+  .regime-banner.neutral .regime-title { color: var(--muted); }
+  .regime-banner.mixed .regime-title { color: var(--amber); }
+  .regime-explanation { font-size: 14px; color: var(--text); line-height: 1.6; }
+
+  .market-metric-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 14px; margin-bottom: 20px;
+  }
+  .market-metric-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;
+  }
+  .market-metric-card .mm-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .market-metric-card .mm-value { font-size: 22px; font-weight: 700; }
+  .market-metric-card .mm-change { font-size: 13px; font-weight: 600; margin-top: 4px; }
+  .mm-change.up { color: var(--green); }
+  .mm-change.down { color: var(--red); }
+  .mm-change.flat { color: var(--muted); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--bg);
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  tbody tr:hover { background: var(--panel-2); }
+  tbody td { padding: 10px 12px; }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .badge.long { background: rgba(38,166,154,0.15); color: var(--green); }
+  .badge.short { background: rgba(239,83,80,0.15); color: var(--red); }
+  .badge.strong { background: rgba(38,166,154,0.18); color: var(--green); }
+  .badge.medium { background: rgba(245,166,35,0.18); color: var(--amber); }
+  .badge.verystrong { background: rgba(79,142,247,0.18); color: var(--blue); }
+
+  .chart-row { display: none; }
+  .chart-row td { background: var(--panel); padding: 16px; }
+  .chart-row img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); }
+  .chart-meta { display: flex; gap: 24px; margin-top: 10px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .chart-meta b { color: var(--text); }
+
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📊 Kripto Formasyon Tarayıcı
+      {% if app_version %}<span style="font-size:12px; font-weight:600; color:var(--amber); background:rgba(245,166,35,0.15); padding:3px 10px; border-radius:20px; margin-left:8px; vertical-align:middle;">{{ app_version }}</span>{% endif %}
+    </h1>
+    <p>Binance Spot · İlk 50 hacimli USDT paritesi · 1H / 4H / 1D · 10 formasyon</p>
+  </div>
+  <div class="controls" id="scanControls">
+    <label>Coin sayısı</label>
+    <input type="number" id="topN" value="50" min="5" max="100" style="width:70px;">
+    <button id="scanBtn" onclick="startScan()">Taramayı Başlat</button>
+    <button id="exportBtn" onclick="exportExcel()" disabled>⬇ Excel'e İndir</button>
+  </div>
+</header>
+
+<div class="view-nav">
+  <button class="view-btn active" data-view="scan" onclick="switchView('scan')">Tarama</button>
+  <button class="view-btn" data-view="market" onclick="switchView('market')">📈 BTC Piyasa Yönü</button>
+  <button class="view-btn" data-view="coinsearch" onclick="switchView('coinsearch')">Coin Ara</button>
+  <button class="view-btn" data-view="backtest" onclick="switchView('backtest')">Backtest</button>
+  <button class="view-btn" data-view="journal" onclick="switchView('journal')">Sinyal Günlüğü</button>
+</div>
+
+<main>
+
+  <!-- ============== BTC PİYASA YÖNÜ GÖRÜNÜMÜ ============== -->
+  <div id="view-market" style="display:none;">
+    <p style="color:var(--muted); font-size:13px; margin-top:0;">
+      BTC fiyatı, TOTAL (toplam piyasa değeri), TOTAL2 (BTC hariç toplam) ve BTC Dominance'ı
+      birlikte değerlendirerek kripto piyasasının genel yönünü (rejimini) belirler — yalnızca
+      değerlerin yükselip düştüğünü değil, aralarındaki ilişkiyi yorumlar.
+    </p>
+    <div class="form-row">
+      <button id="marketRefreshBtn" onclick="fetchMarketDirection()">🔄 Yenile</button>
+      <span id="marketUpdatedAt" style="color:var(--muted); font-size:12px;"></span>
+    </div>
+    <div id="marketWrap">
+      <div class="empty-state">Yükleniyor...</div>
+    </div>
+  </div>
+
+  <!-- ============== TARAMA GÖRÜNÜMÜ ============== -->
+  <div id="view-scan">
+    <div class="status-bar">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong id="stageLabel">Hazır</strong>
+        <span id="countLabel" style="color:var(--muted); font-size:12px;"></span>
+      </div>
+      <div class="progress-outer"><div class="progress-inner" id="progressBar"></div></div>
+      <div class="status-msg" id="statusMsg">Taramayı başlatmak için butona tıklayın.</div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="all" onclick="switchTab('all')">Tüm Sonuçlar</button>
+      <button class="tab-btn" data-tab="long" onclick="switchTab('long')">En Güçlü LONG (İlk 10)</button>
+      <button class="tab-btn" data-tab="short" onclick="switchTab('short')">En Güçlü SHORT (İlk 10)</button>
+    </div>
+
+    <div id="tableWrap">
+      <div class="empty-state">Henüz sonuç yok. Taramayı başlatın.</div>
+    </div>
+  </div>
+
+  <!-- ============== COIN ARA GÖRÜNÜMÜ ============== -->
+  <div id="view-coinsearch" style="display:none;">
+    <p style="color:var(--muted); font-size:13px; margin-top:0;">
+      Ana taramada (ilk 50 hacimli coin) yer almasa bile, istediğiniz TEK bir coini burada
+      arayabilirsiniz. Sistem o coin için 1H/4H/1D'yi tarar; hem 60 puan üzerindeki aktif
+      sinyalleri hem de eşiği geçemeyen (60 altı) formasyonları skorlarıyla birlikte gösterir —
+      böylece "bu coin neden ana taramada çıkmadı" sorusuna somut bir cevap bulabilirsiniz.
+    </p>
+    <div class="form-row">
+      <label>Coin</label>
+      <input type="text" id="csSymbol" placeholder="ADAUSDT" style="width:140px;">
+      <button id="csStartBtn" onclick="startCoinSearch()">Ara</button>
+    </div>
+
+    <div class="status-bar">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong id="csStageLabel">Hazır</strong>
+        <span id="csCountLabel" style="color:var(--muted); font-size:12px;"></span>
+      </div>
+      <div class="progress-outer"><div class="progress-inner" id="csProgressBar"></div></div>
+      <div class="status-msg" id="csStatusMsg">Bir coin sembolü girip "Ara"ya tıklayın.</div>
+    </div>
+
+    <div id="csResultWrap">
+      <div class="empty-state">Henüz bir coin aranmadı.</div>
+    </div>
+  </div>
+
+  <!-- ============== BACKTEST GÖRÜNÜMÜ ============== -->
+  <div id="view-backtest" style="display:none;">
+    <p style="color:var(--muted); font-size:13px; margin-top:0;">
+      Seçtiğiniz coin/zaman dilimi için geçmiş veride formasyon tespit motorunu "ileriye doğru
+      yürüyerek" (walk-forward) çalıştırır: her formasyon bulunduğunda gerçekte hedefe mi yoksa
+      stop'a mı önce ulaşıldığını ölçer. Geleceğe bakmaz, yalnızca o ana kadarki veriyi kullanır.
+      Yalnızca canlı tarayıcıda da gösterilecek kalitede olan (skor ≥ 60) formasyonlar sayılır —
+      böylece sonuçlar gerçekten aracın önereceği sinyalleri yansıtır.
+    </p>
+    <div class="form-row">
+      <label>Coin</label>
+      <input type="text" id="btSymbol" placeholder="BTCUSDT" value="BTCUSDT" style="width:120px;">
+      <label>Zaman Dilimi</label>
+      <select id="btTf">
+        <option value="1h">1H</option>
+        <option value="4h" selected>4H</option>
+        <option value="1d">1D</option>
+      </select>
+      <button id="btStartBtn" onclick="startBacktest()">Backtest Çalıştır</button>
+    </div>
+
+    <div class="status-bar">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong id="btStageLabel">Hazır</strong>
+        <span id="btCountLabel" style="color:var(--muted); font-size:12px;"></span>
+      </div>
+      <div class="progress-outer"><div class="progress-inner" id="btProgressBar"></div></div>
+      <div class="status-msg" id="btStatusMsg">Bir coin seçip "Backtest Çalıştır"a tıklayın.</div>
+    </div>
+
+    <div id="btResultWrap">
+      <div class="empty-state">Henüz backtest çalıştırılmadı.</div>
+    </div>
+  </div>
+
+  <!-- ============== SİNYAL GÜNLÜĞÜ GÖRÜNÜMÜ ============== -->
+  <div id="view-journal" style="display:none;">
+    <p style="color:var(--muted); font-size:13px; margin-top:0;">
+      Her taramada bulunan sinyaller otomatik olarak buraya kaydedilir. "Fiyatları Güncelle"
+      butonuna basarak açık sinyallerin hedefe mi stop'a mı ulaştığını anlık fiyatlarla kontrol
+      edebilirsiniz.
+    </p>
+    <div class="form-row">
+      <button onclick="refreshJournal()">🔄 Fiyatları Güncelle</button>
+      <button id="journalExportBtn" onclick="exportJournal()" style="background:var(--green);">⬇ Excel'e Aktar</button>
+      <button onclick="clearJournal()" style="background:var(--red);">🗑 Günlüğü Temizle</button>
+    </div>
+
+    <div class="stat-cards" id="journalStats"></div>
+
+    <div id="journalTableWrap">
+      <div class="empty-state">Henüz kayıtlı sinyal yok. Bir tarama çalıştırın.</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+let currentTab = 'all';
+let lastData = { results: [], top_long: [], top_short: [] };
+let polling = null;
+
+function badgeForLabel(label) {
+  if (label === 'Çok Güçlü') return 'verystrong';
+  if (label === 'Güçlü') return 'strong';
+  return 'medium';
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  renderTable();
+}
+
+function startScan() {
+  const topN = parseInt(document.getElementById('topN').value || '50', 10);
+  document.getElementById('scanBtn').disabled = true;
+  fetch('/api/scan', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ top_n: topN, timeframes: ['1h','4h','1d'] })
+  }).then(r => r.json()).then(data => {
+    if (!data.ok) { alert(data.message); document.getElementById('scanBtn').disabled = false; }
+    else { poll(); }
+  });
+}
+
+function poll() {
+  if (polling) clearInterval(polling);
+  polling = setInterval(() => {
+    fetch('/api/status').then(r => r.json()).then(s => {
+      document.getElementById('stageLabel').textContent = stageLabelText(s.stage);
+      document.getElementById('statusMsg').textContent = s.message;
+      const pct = s.total > 0 ? Math.round((s.current / s.total) * 100) : (s.stage === 'done' ? 100 : 5);
+      document.getElementById('progressBar').style.width = pct + '%';
+      document.getElementById('countLabel').textContent = s.total ? `${s.current}/${s.total}` : '';
+
+      if (!s.running) {
+        clearInterval(polling);
+        document.getElementById('scanBtn').disabled = false;
+        if (s.stage === 'done') fetchResults();
+      }
+    });
+  }, 1200);
+}
+
+function stageLabelText(stage) {
+  const map = {
+    idle: 'Hazır', starting: 'Başlatılıyor', symbols: 'Coin listesi hazırlanıyor',
+    scanning: 'Taranıyor', done: 'Tamamlandı', error: 'Hata'
+  };
+  return map[stage] || stage;
+}
+
+function fetchResults() {
+  fetch('/api/results').then(r => r.json()).then(data => {
+    lastData = data;
+    renderTable();
+    document.getElementById('exportBtn').disabled = !(data.results && data.results.length);
+  });
+}
+
+function exportExcel() {
+  window.location.href = '/api/export';
+}
+
+// Sayfa yeniden açıldığında önceki tarama sonucu varsa göster
+window.addEventListener('DOMContentLoaded', fetchResults);
+
+function renderTable() {
+  const wrap = document.getElementById('tableWrap');
+  let rows = currentTab === 'all' ? lastData.results
+            : currentTab === 'long' ? lastData.top_long
+            : lastData.top_short;
+
+  if (!rows || rows.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Bu kategoride sonuç bulunamadı.</div>';
+    return;
+  }
+
+  let html = `<table><thead><tr>
+    <th>Coin</th><th>TF</th><th>Formasyon</th><th>Yön</th><th>Skor</th>
+    <th>Başarı %</th><th>Breakout</th><th>Hacim</th><th>Güven</th>
+  </tr></thead><tbody>`;
+
+  rows.forEach((r, i) => {
+    const dirBadge = r.direction === 'LONG' ? 'long' : 'short';
+    html += `<tr onclick="toggleChart(${i}, '${currentTab}')">
+      <td><b>${r.symbol}</b></td>
+      <td>${r.timeframe.toUpperCase()}</td>
+      <td>${r.pattern}</td>
+      <td><span class="badge ${dirBadge}">${r.direction}</span></td>
+      <td>${r.score}</td>
+      <td>${r.success_probability}%</td>
+      <td>${r.breakout}</td>
+      <td>${r.volume_desc}</td>
+      <td><span class="badge ${badgeForLabel(r.label)}">${r.label}</span></td>
+    </tr>
+    <tr class="chart-row" id="chart-${currentTab}-${i}"><td colspan="9">
+      ${r.chart_path ? `<img src="/charts/${r.chart_path.split('/').pop()}" />` : '<i>Grafik oluşturulamadı.</i>'}
+      <div class="chart-meta">
+        <span>Güncel Fiyat: <b>${r.last_price}</b></span>
+        <span>Breakout Seviyesi: <b>${r.breakout_level ? r.breakout_level.toFixed(6) : '-'}</b></span>
+        <span>Hedef: <b>${r.target ? r.target.toFixed(6) : '-'}</b></span>
+        <span>Stop Loss: <b>${r.stop_loss ? r.stop_loss.toFixed(6) : '-'}</b></span>
+        <span>Fake Breakout Riski: <b>${r.fake_breakout_risk || '-'}</b></span>
+      </div>
+    </td></tr>`;
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function toggleChart(i, tab) {
+  const row = document.getElementById(`chart-${tab}-${i}`);
+  if (!row) return;
+  row.style.display = row.style.display === 'table-row' ? 'none' : 'table-row';
+}
+
+// ============== GÖRÜNÜM (VIEW) YÖNETİMİ ==============
+function switchView(view) {
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.getElementById('view-scan').style.display = view === 'scan' ? '' : 'none';
+  document.getElementById('view-market').style.display = view === 'market' ? '' : 'none';
+  document.getElementById('view-coinsearch').style.display = view === 'coinsearch' ? '' : 'none';
+  document.getElementById('view-backtest').style.display = view === 'backtest' ? '' : 'none';
+  document.getElementById('view-journal').style.display = view === 'journal' ? '' : 'none';
+  document.getElementById('scanControls').style.display = view === 'scan' ? '' : 'none';
+  if (view === 'journal') fetchJournal();
+  if (view === 'market' && !_marketLoadedOnce) { fetchMarketDirection(); _marketLoadedOnce = true; }
+}
+let _marketLoadedOnce = false;
+
+// ============== BACKTEST ==============
+let btPolling = null;
+
+function startBacktest() {
+  const symbol = document.getElementById('btSymbol').value.trim().toUpperCase();
+  const timeframe = document.getElementById('btTf').value;
+  if (!symbol) { alert('Lütfen bir coin sembolü girin (ör. BTCUSDT).'); return; }
+
+  document.getElementById('btStartBtn').disabled = true;
+  document.getElementById('btResultWrap').innerHTML = '<div class="empty-state">Backtest çalışıyor, lütfen bekleyin...</div>';
+
+  fetch('/api/backtest', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ symbol, timeframe })
+  }).then(r => r.json()).then(data => {
+    if (!data.ok) { alert(data.message); document.getElementById('btStartBtn').disabled = false; }
+    else { pollBacktest(); }
+  });
+}
+
+function pollBacktest() {
+  if (btPolling) clearInterval(btPolling);
+  btPolling = setInterval(() => {
+    fetch('/api/backtest/status').then(r => r.json()).then(s => {
+      document.getElementById('btStageLabel').textContent = s.running ? 'Çalışıyor' : (s.error ? 'Hata' : 'Tamamlandı');
+      document.getElementById('btStatusMsg').textContent = s.message;
+      const pct = s.total > 0 ? Math.round((s.current / s.total) * 100) : (s.has_result ? 100 : 5);
+      document.getElementById('btProgressBar').style.width = pct + '%';
+      document.getElementById('btCountLabel').textContent = s.total ? `${s.current}/${s.total}` : '';
+
+      if (!s.running) {
+        clearInterval(btPolling);
+        document.getElementById('btStartBtn').disabled = false;
+        if (s.has_result) fetchBacktestResults();
+      }
+    });
+  }, 1000);
+}
+
+function fetchBacktestResults() {
+  fetch('/api/backtest/results').then(r => r.json()).then(data => renderBacktestResults(data));
+}
+
+function renderBacktestResults(data) {
+  const wrap = document.getElementById('btResultWrap');
+  const summary = data.summary || [];
+  if (summary.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Bu dönemde hiç formasyon bulunamadı.</div>';
+    return;
+  }
+  let html = `<p style="color:var(--muted); font-size:12px;">
+    ${data.symbol} · ${data.timeframe.toUpperCase()} · ${data.total_candles_used} mum tarandı · ${data.trades.length} sinyal simüle edildi
+  </p>
+  <table><thead><tr>
+    <th>Formasyon</th><th>Yön</th><th>Toplam Sinyal</th><th>Çözümlenen</th>
+    <th>Hedef</th><th>Stop</th><th>Açık/Belirsiz</th><th>Başarı Oranı</th>
+    <th>Ort. Getiri</th><th>Ort. Mum Sayısı</th>
+  </tr></thead><tbody>`;
+  summary.forEach(s => {
+    const dirBadge = s.direction === 'LONG' ? 'long' : 'short';
+    const rate = s.başarı_oranı;
+    const rateColor = rate === null ? 'var(--muted)' : rate >= 60 ? 'var(--green)' : rate >= 40 ? 'var(--amber)' : 'var(--red)';
+    html += `<tr>
+      <td>${s.pattern}</td>
+      <td><span class="badge ${dirBadge}">${s.direction}</span></td>
+      <td>${s.toplam_sinyal}</td>
+      <td>${s.çözümlenen}</td>
+      <td>${s.hedef}</td>
+      <td>${s.stop}</td>
+      <td>${s.açık_belirsiz}</td>
+      <td style="color:${rateColor}; font-weight:700;">${rate === null ? '-' : rate + '%'}</td>
+      <td>${s.ortalama_getiri_pct === null ? '-' : s.ortalama_getiri_pct + '%'}</td>
+      <td>${s.ortalama_mum_sayısı === null ? '-' : s.ortalama_mum_sayısı}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+// ============== BTC PİYASA YÖNÜ ==============
+function formatUsdBig(n) {
+  if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
+  if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'Milyar';
+  if (n >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+  return '$' + n.toLocaleString();
+}
+
+function changeClass(v) {
+  if (v > 0.05) return 'up';
+  if (v < -0.05) return 'down';
+  return 'flat';
+}
+
+function changeArrow(v) {
+  if (v > 0.05) return '▲';
+  if (v < -0.05) return '▼';
+  return '▬';
+}
+
+function fetchMarketDirection() {
+  const wrap = document.getElementById('marketWrap');
+  document.getElementById('marketRefreshBtn').disabled = true;
+  fetch('/api/market-direction').then(r => r.json()).then(data => {
+    document.getElementById('marketRefreshBtn').disabled = false;
+    if (!data.ok) {
+      wrap.innerHTML = `<div class="empty-state">❌ ${data.message || 'Piyasa verisi alınamadı.'}</div>`;
+      return;
+    }
+    renderMarketDirection(data);
+  }).catch(err => {
+    document.getElementById('marketRefreshBtn').disabled = false;
+    wrap.innerHTML = `<div class="empty-state">❌ Bağlantı hatası: ${err}</div>`;
+  });
+}
+
+function renderMarketDirection(d) {
+  const wrap = document.getElementById('marketWrap');
+
+  if (d.updated_at) {
+    const dt = new Date(d.updated_at * 1000);
+    document.getElementById('marketUpdatedAt').textContent =
+      'Son güncelleme: ' + dt.toLocaleTimeString('tr-TR');
+  }
+
+  const sentiment = d.sentiment || 'neutral';
+  let html = `
+    <div class="regime-banner ${sentiment}">
+      <div class="regime-title">${d.regime}</div>
+      <div class="regime-explanation">${d.explanation}</div>
+    </div>
+
+    <div class="market-metric-grid">
+      <div class="market-metric-card">
+        <div class="mm-label">₿ BTC Fiyatı (BTCUSDT)</div>
+        <div class="mm-value">$${d.btc_price.toLocaleString(undefined, {maximumFractionDigits:2})}</div>
+        <div class="mm-change ${changeClass(d.btc_chg_24h_pct)}">${changeArrow(d.btc_chg_24h_pct)} ${d.btc_chg_24h_pct > 0 ? '+' : ''}${d.btc_chg_24h_pct}% (24s)</div>
+      </div>
+      <div class="market-metric-card">
+        <div class="mm-label">🌐 TOTAL — Toplam Piyasa Değeri</div>
+        <div class="mm-value">${formatUsdBig(d.total_mcap)}</div>
+        <div class="mm-change ${changeClass(d.total_chg_24h_pct)}">${changeArrow(d.total_chg_24h_pct)} ${d.total_chg_24h_pct > 0 ? '+' : ''}${d.total_chg_24h_pct}% (24s)</div>
+      </div>
+      <div class="market-metric-card">
+        <div class="mm-label">🪙 TOTAL2 — BTC Hariç Toplam</div>
+        <div class="mm-value">${formatUsdBig(d.total2_mcap)}</div>
+        <div class="mm-change ${changeClass(d.total2_chg_24h_pct)}">${changeArrow(d.total2_chg_24h_pct)} ${d.total2_chg_24h_pct > 0 ? '+' : ''}${d.total2_chg_24h_pct}% (24s)</div>
+      </div>
+      <div class="market-metric-card">
+        <div class="mm-label">👑 BTC Dominance (BTC.D)</div>
+        <div class="mm-value">${d.btc_dominance}%</div>
+        <div class="mm-change ${changeClass(d.btc_dominance_chg_24h_pp)}">${changeArrow(d.btc_dominance_chg_24h_pp)} ${d.btc_dominance_chg_24h_pp > 0 ? '+' : ''}${d.btc_dominance_chg_24h_pp} puan (24s)</div>
+      </div>
+    </div>
+
+    <p style="color:var(--muted); font-size:12px;">
+      Veri kaynakları: BTC fiyatı Binance'ten, TOTAL/BTC.D CoinGecko'nun global piyasa verisinden
+      alınır; TOTAL2 bu ikisinden türetilir. Sonuçlar ~60 saniye önbelleklenir.
+    </p>
+  `;
+  wrap.innerHTML = html;
+}
+
+// ============== COIN ARA ==============
+let csPolling = null;
+
+function startCoinSearch() {
+  const symbol = document.getElementById('csSymbol').value.trim().toUpperCase();
+  if (!symbol) { alert('Lütfen bir coin sembolü girin (ör. ADAUSDT).'); return; }
+
+  document.getElementById('csStartBtn').disabled = true;
+  document.getElementById('csResultWrap').innerHTML = '<div class="empty-state">Aranıyor, lütfen bekleyin...</div>';
+
+  fetch('/api/coin-search', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ symbol })
+  }).then(r => r.json()).then(data => {
+    if (!data.ok) { alert(data.message); document.getElementById('csStartBtn').disabled = false; }
+    else { pollCoinSearch(); }
+  });
+}
+
+function pollCoinSearch() {
+  if (csPolling) clearInterval(csPolling);
+  csPolling = setInterval(() => {
+    fetch('/api/coin-search/status').then(r => r.json()).then(s => {
+      document.getElementById('csStageLabel').textContent = s.running ? 'Çalışıyor' : (s.error ? 'Hata' : 'Tamamlandı');
+      document.getElementById('csStatusMsg').textContent = s.message;
+      const pct = s.total > 0 ? Math.round((s.current / s.total) * 100) : (s.has_result ? 100 : 5);
+      document.getElementById('csProgressBar').style.width = pct + '%';
+      document.getElementById('csCountLabel').textContent = s.total ? `${s.current}/${s.total}` : '';
+
+      if (!s.running) {
+        clearInterval(csPolling);
+        document.getElementById('csStartBtn').disabled = false;
+        if (s.error) {
+          document.getElementById('csResultWrap').innerHTML =
+            `<div class="empty-state">❌ ${s.message}</div>`;
+        } else if (s.has_result) {
+          fetchCoinSearchResults();
+        }
+      }
+    });
+  }, 1000);
+}
+
+function fetchCoinSearchResults() {
+  fetch('/api/coin-search/results').then(r => r.json()).then(data => renderCoinSearchResults(data));
+}
+
+function _csRow(r, i, group) {
+  const dirBadge = r.direction === 'LONG' ? 'long' : 'short';
+  return `<tr onclick="toggleChart(${i}, '${group}')">
+      <td>${r.timeframe.toUpperCase()}</td>
+      <td>${r.pattern}</td>
+      <td><span class="badge ${dirBadge}">${r.direction}</span></td>
+      <td>${r.score}</td>
+      <td>${r.success_probability}%</td>
+      <td>${r.breakout}</td>
+      <td>${r.volume_desc}</td>
+      <td><span class="badge ${badgeForLabel(r.label)}">${r.label}</span></td>
+    </tr>
+    <tr class="chart-row" id="chart-${group}-${i}"><td colspan="8">
+      ${r.chart_path ? `<img src="/charts/${r.chart_path.split('/').pop()}" />` : '<i>Grafik oluşturulamadı.</i>'}
+      <div class="chart-meta">
+        <span>Güncel Fiyat: <b>${r.last_price}</b></span>
+        <span>Breakout Seviyesi: <b>${r.breakout_level ? r.breakout_level.toFixed(6) : '-'}</b></span>
+        <span>Hedef: <b>${r.target ? r.target.toFixed(6) : '-'}</b></span>
+        <span>Stop Loss: <b>${r.stop_loss ? r.stop_loss.toFixed(6) : '-'}</b></span>
+        <span>Fake Breakout Riski: <b>${r.fake_breakout_risk || '-'}</b></span>
+      </div>
+    </td></tr>`;
+}
+
+function renderCoinSearchResults(data) {
+  const wrap = document.getElementById('csResultWrap');
+  const qualified = data.qualified || [];
+  const below = data.below_threshold || [];
+
+  if (qualified.length === 0 && below.length === 0) {
+    wrap.innerHTML = `<div class="empty-state">${data.symbol || ''} için hiçbir zaman diliminde formasyon geometrisi bile oluşmamış.</div>`;
+    return;
+  }
+
+  let html = '';
+
+  html += `<h3 style="margin:18px 0 8px;">✅ Aktif Sinyaller (Skor ≥ 60)</h3>`;
+  if (qualified.length === 0) {
+    html += `<div class="empty-state">${data.symbol} için şu an 60 puan üzerinde aktif bir sinyal yok — bu yüzden ana taramada çıkmadı.</div>`;
+  } else {
+    html += `<table><thead><tr>
+      <th>TF</th><th>Formasyon</th><th>Yön</th><th>Skor</th><th>Başarı %</th>
+      <th>Breakout</th><th>Hacim</th><th>Güven</th>
+    </tr></thead><tbody>`;
+    qualified.forEach((r, i) => { html += _csRow(r, i, 'csq'); });
+    html += '</tbody></table>';
+  }
+
+  html += `<h3 style="margin:24px 0 8px;">⚠️ Eşiği Geçemeyen Formasyonlar (Skor &lt; 60)</h3>`;
+  if (below.length === 0) {
+    html += `<div class="empty-state">Eşiği geçemeyen bir formasyon da bulunamadı.</div>`;
+  } else {
+    html += `<p style="color:var(--muted); font-size:12px;">Bu formasyonlar geometrik olarak tespit edildi ama kalite eşiğini geçemediği için ana taramada gösterilmiyor.</p>`;
+    html += `<table><thead><tr>
+      <th>TF</th><th>Formasyon</th><th>Yön</th><th>Skor</th><th>Başarı %</th>
+      <th>Breakout</th><th>Hacim</th><th>Güven</th>
+    </tr></thead><tbody>`;
+    below.forEach((r, i) => { html += _csRow(r, i, 'csb'); });
+    html += '</tbody></table>';
+  }
+
+  wrap.innerHTML = html;
+}
+
+// ============== SİNYAL GÜNLÜĞÜ ==============
+function fetchJournal() {
+  fetch('/api/journal').then(r => r.json()).then(data => renderJournal(data));
+}
+
+function renderJournal(data) {
+  const s = data.summary || {};
+  const statsWrap = document.getElementById('journalStats');
+  statsWrap.innerHTML = `
+    <div class="stat-card"><div class="num">${s.toplam ?? 0}</div><div class="lbl">Toplam Sinyal</div></div>
+    <div class="stat-card"><div class="num">${s.açık ?? 0}</div><div class="lbl">Açık</div></div>
+    <div class="stat-card win"><div class="num">${s.hedef ?? 0}</div><div class="lbl">Hedef Vurdu</div></div>
+    <div class="stat-card loss"><div class="num">${s.stop ?? 0}</div><div class="lbl">Stop Vurdu</div></div>
+    <div class="stat-card"><div class="num">${s.gerçek_başarı_oranı === null || s.gerçek_başarı_oranı === undefined ? '-' : s.gerçek_başarı_oranı + '%'}</div><div class="lbl">Gerçek Başarı Oranı</div></div>
+  `;
+
+  const wrap = document.getElementById('journalTableWrap');
+  const signals = data.signals || [];
+  if (signals.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Henüz kayıtlı sinyal yok. Bir tarama çalıştırın.</div>';
+    return;
+  }
+
+  let html = `<table><thead><tr>
+    <th>Tarih</th><th>Coin</th><th>TF</th><th>Formasyon</th><th>Yön</th>
+    <th>Skor</th><th>Başarı %</th><th>Güven</th>
+    <th>Giriş Fiyatı</th><th>Hedef</th><th>Stop</th><th>Güncel Fiyat</th><th>Durum</th>
+  </tr></thead><tbody>`;
+  signals.forEach(sig => {
+    const dirBadge = sig.direction === 'LONG' ? 'long' : 'short';
+    let statusColor = 'var(--muted)', statusText = sig.status;
+    if (sig.status === 'HEDEF') { statusColor = 'var(--green)'; statusText = '✓ Hedef Vurdu'; }
+    else if (sig.status === 'STOP') { statusColor = 'var(--red)'; statusText = '✗ Stop Vurdu'; }
+    else { statusText = '⏳ Açık'; }
+    const dateStr = (sig.created_at || '').replace('T', ' ').slice(0, 16);
+    const confBadge = sig.label === 'Çok Güçlü' ? 'verystrong' : sig.label === 'Güçlü' ? 'strong' : 'medium';
+    html += `<tr>
+      <td style="color:var(--muted); font-size:12px;">${dateStr}</td>
+      <td><b>${sig.symbol}</b></td>
+      <td>${sig.timeframe.toUpperCase()}</td>
+      <td>${sig.pattern}</td>
+      <td><span class="badge ${dirBadge}">${sig.direction}</span></td>
+      <td>${sig.score ?? '-'}</td>
+      <td>${sig.success_probability != null ? sig.success_probability + '%' : '-'}</td>
+      <td>${sig.label ? `<span class="badge ${confBadge}">${sig.label}</span>` : '-'}</td>
+      <td>${sig.entry_price}</td>
+      <td>${sig.target}</td>
+      <td>${sig.stop_loss}</td>
+      <td>${sig.last_price ?? '-'}</td>
+      <td style="color:${statusColor}; font-weight:700;">${statusText}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function refreshJournal() {
+  fetch('/api/journal/refresh', { method: 'POST' }).then(r => r.json()).then(data => {
+    if (!data.ok) { alert(data.message); return; }
+    fetchJournal();
+  });
+}
+
+function exportJournal() {
+  window.location.href = '/api/journal/export';
+}
+
+function clearJournal() {
+  if (!confirm('Tüm sinyal günlüğü kalıcı olarak silinecek. Emin misiniz?')) return;
+  fetch('/api/journal/clear', { method: 'POST' }).then(r => r.json()).then(() => fetchJournal());
+}
+</script>
+
+</body>
+</html>
