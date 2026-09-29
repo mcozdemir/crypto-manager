@@ -336,7 +336,7 @@ def _liquidity(ctx: ScanContext, symbol: str) -> Dict:
             if bid > 0 and ask > 0:
                 bps = (ask - bid) / ((ask + bid) / 2) * 10000
                 parts.append((0.4, float(np.interp(bps, [1, 5, 20, 50], [100, 85, 40, 0]))))
-                notes.append(f"alış-satış farkı %{bps / 100:.3f}".replace(".", ","))
+                notes.append(f"alış-satış farkı %{bps / 100:.{4 if bps < 1 else 3}f}".replace(".", ","))
         except (TypeError, ValueError, KeyError):
             pass
     if not parts:

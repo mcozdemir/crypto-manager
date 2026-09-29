@@ -23,6 +23,7 @@ from scoring import score_pattern
 from charts import plot_pattern
 from ayarlar import DEFAULT_TOP_N, TIMEFRAMES, MIN_SCORE, KLINE_LIMIT
 import confidence
+from version import VERSION
 
 logging.basicConfig(
     level=logging.INFO,
@@ -122,6 +123,7 @@ def run_scan(top_n: int = DEFAULT_TOP_N, timeframes: Optional[List[str]] = None,
                         "chart_path": chart_path,
                         "score_breakdown": score_info["scores"],
                         "detected_at": datetime.now().isoformat(timespec="seconds"),
+                        "app_version": VERSION,
                     })
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Hata (%s / %s): %s", symbol, tf, exc)
@@ -228,6 +230,7 @@ def scan_single_symbol(symbol: str, timeframes: Optional[List[str]] = None,
                 "chart_path": chart_path,
                 "score_breakdown": score_info["scores"],
                 "detected_at": datetime.now().isoformat(timespec="seconds"),
+                "app_version": VERSION,
             }
             if score_info["total_score"] >= MIN_SCORE:
                 tf_qualified.append(row)

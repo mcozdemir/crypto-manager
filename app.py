@@ -28,6 +28,7 @@ from excel_export import build_excel, export_filename, build_journal_excel, jour
 import journal
 from db import get_db
 import auth
+from version import version_label
 from backtest import run_backtest
 from utils import get_latest_prices
 from market_direction import compute_market_snapshot
@@ -170,7 +171,8 @@ def _run_scan_background(top_n: int, timeframes: list):
 
 @app.route("/")
 def index():
-    return render_template("index.html", timeframes=TIMEFRAMES, app_version=APP_VERSION)
+    return render_template("index.html", timeframes=TIMEFRAMES, app_version=APP_VERSION,
+                           release=version_label())
 
 
 @app.route("/api/scan", methods=["POST"])
@@ -399,9 +401,16 @@ def api_journal():
         timeframe=args.get("timeframe") or None,
         since=args.get("since") or None,
         until=args.get("until") or None,
+        version=args.get("version") or None,
     )
-    summary = journal.get_summary()
+    summary = journal.get_summary(version=args.get("version") or None)
     return jsonify({"signals": signals, "summary": summary})
+
+
+@app.route("/api/journal/versions")
+def api_journal_versions():
+    """Sürüm bazında sinyal sonuçları ve endeks isabeti (karşılaştırma için)."""
+    return jsonify(journal.get_version_stats())
 
 
 @app.route("/api/journal/refresh", methods=["POST"])
@@ -427,8 +436,9 @@ def api_journal_clear():
 
 @app.route("/api/journal/export")
 def api_journal_export():
-    signals = journal.get_all_signals(limit=100000)
-    summary = journal.get_summary()
+    version = request.args.get("version") or None
+    signals = journal.get_signals(limit=100000, version=version)
+    summary = journal.get_summary(version=version)
     if not signals:
         return jsonify({"ok": False, "message": "Dışa aktarılacak sinyal yok."}), 400
 
@@ -452,7 +462,7 @@ if __name__ == "__main__":
     print(f"Kripto Formasyon Tarayıcı - Web Paneli  [{APP_VERSION}]")
     browser_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
     print(f"Tarayıcınızda şu adresi açın: http://{browser_host}:{port}")
-    print(f"Sinyal günlüğü: {get_db().describe()}")
+    print(f"Sürüm: {version_label()} · Sinyal günlüğü: {get_db().describe()}")
     print("=" * 70)
     try:
         app.run(host=host, port=port, debug=DEBUG_MODE)

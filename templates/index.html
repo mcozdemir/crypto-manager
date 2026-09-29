@@ -193,6 +193,14 @@
   .signal-table .col-pattern { min-width: 150px; }
   .signal-table .sub { font-size: 11px; margin-top: 3px; color: var(--text); }
   .signal-table small, .mini small { color: var(--muted); font-weight: 400; }
+  .ver-pill { font-size: 11px; font-weight: 600; color: var(--blue); background: rgba(79,142,247,0.14); padding: 3px 9px; border-radius: 20px; margin-left: 6px; vertical-align: middle; }
+  .ver-tag { display: inline-block; font-size: 10px; font-weight: 600; color: var(--blue); background: rgba(79,142,247,0.12); padding: 1px 6px; border-radius: 10px; margin-top: 3px; }
+  .ver-tag.inferred { color: var(--muted); background: var(--panel-2); }
+  details.versions { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; }
+  details.versions summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+  details.versions table { margin-top: 10px; }
+  details.versions tbody tr { cursor: default; }
+  select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: 13px; }
   .muted, .signal-table .muted, .signal-table .sub.muted { color: var(--muted); }
   .up { color: var(--green); } .down { color: var(--red); } .mid { color: var(--amber); }
   .sc { font-weight: 700; white-space: nowrap; }
@@ -247,6 +255,7 @@
   <div>
     <h1>📊 Kripto Formasyon Tarayıcı
       {% if app_version %}<span style="font-size:12px; font-weight:600; color:var(--amber); background:rgba(245,166,35,0.15); padding:3px 10px; border-radius:20px; margin-left:8px; vertical-align:middle;">{{ app_version }}</span>{% endif %}
+      {% if release %}<span class="ver-pill" title="Uygulama sürümü: her sinyal hangi sürümde üretildiyse günlükte o sürümle kaydedilir.">{{ release }}</span>{% endif %}
     </h1>
     <p>Binance Spot · İlk 50 hacimli USDT paritesi · 1H / 4H / 1D · 10 formasyon</p>
   </div>
@@ -386,9 +395,16 @@
       <button onclick="refreshJournal()">🔄 Fiyatları Güncelle</button>
       <button id="journalExportBtn" onclick="exportJournal()" style="background:var(--green);">⬇ Excel'e Aktar</button>
       <button onclick="clearJournal()" style="background:var(--red);">🗑 Günlüğü Temizle</button>
+      <label style="margin-left:auto; font-size:13px; color:var(--muted);">Sürüm</label>
+      <select id="journalVersion" onchange="fetchJournal()"><option value="">Tüm sürümler</option></select>
     </div>
 
     <div class="stat-cards" id="journalStats"></div>
+
+    <details class="versions" id="versionStatsBox">
+      <summary>Sürüm karşılaştırması</summary>
+      <div id="versionStatsWrap"><div class="empty-state">Yükleniyor...</div></div>
+    </details>
 
     <div id="journalTableWrap">
       <div class="empty-state">Henüz kayıtlı sinyal yok. Bir tarama çalıştırın.</div>
@@ -413,7 +429,7 @@
 // Tüm puanlar sinyalin YÖNÜNE göredir: yüksek puan = veri bu LONG/SHORT sinyalini destekliyor.
 
 const COLUMN_INFO = {
-  date: 'Sinyalin tespit edildiği an. Tarama sonuçlarında tarama zamanı, Sinyal Günlüğü\'nde kayıt zamanı.',
+  date: 'Sinyalin tespit edildiği an ve sinyali üreten uygulama sürümü (ör. v1.3.0). Sürüm bazında başarı karşılaştırması Sinyal Günlüğü\'ndeki "Sürüm karşılaştırması" bölümündedir. Gri sürüm etiketi: sürüm bilgisi eklenmeden önceki kayıtlar için geriye dönük tahmin.',
   coin: 'Binance spot paritesi ve formasyonun bulunduğu zaman dilimi. 1H = saatlik, 4H = 4 saatlik, 1D = günlük mumlar.',
   dir: 'LONG: fiyatın yükselmesi beklenir (alış pozisyonu). SHORT: fiyatın düşmesi beklenir (açığa satış). Tablodaki tüm puanlar bu yöne göre hesaplanır; aynı piyasa verisi LONG için düşük, SHORT için yüksek puan üretebilir.',
   pattern: 'Tespit edilen grafik formasyonu ve 100 üzerinden kalite skoru (geometri, hacim, kırılım, trend, volatilite, momentum). "Geçmiş" yüzdesi: aynı formasyon + zaman dilimi + yöndeki geçmiş sinyallerin kaçının stop\'tan önce hedefe ulaştığı. Parantezdeki sayı sonuçlanmış sinyal adedidir; 10\'dan azsa "veri az" yazar.',
@@ -498,6 +514,7 @@ function normalizeScanRow(r) {
     conf: c, hist_rate: r.hist_rate, hist_n: r.hist_n,
     entry: r.last_price, current: r.last_price, target: r.target, stop: r.stop_loss,
     rr: c.rr, target_pct: c.target_pct, stop_pct: c.stop_pct, fundamental_score: r.fundamental_score,
+    app_version: r.app_version,
     status: 'YENİ', chart_path: r.chart_path, breakdown: r.score_breakdown,
     breakout: r.breakout, volume_desc: r.volume_desc, fake_breakout_risk: r.fake_breakout_risk,
     breakout_level: r.breakout_level,
@@ -524,6 +541,7 @@ function normalizeJournalRow(s) {
     target_pct: c.target_pct ?? pct(s.target, s.entry_price),
     stop_pct: c.stop_pct ?? pct(s.stop_loss, s.entry_price),
     status: s.status, closed_at: s.closed_at, source: s.source,
+    app_version: s.app_version, app_commit: s.app_commit,
   };
 }
 
@@ -568,7 +586,7 @@ function renderSignalTable(rows, group, opts = {}) {
     const cmScore = cm.score ?? r.cm_score;
 
     html += `<tr class="sig-row" onclick="toggleDetail('${group}', ${i})">
-      <td class="col-date muted">${fmtDate(r.date)}</td>
+      <td class="col-date muted">${fmtDate(r.date)}${r.app_version ? `<div><span class="ver-tag ${r.app_commit === null ? 'inferred' : ''}" title="${r.app_commit ? 'Uygulama sürümü · commit ' + r.app_commit : r.app_commit === null ? 'Geriye dönük tahmini sürüm etiketi' : 'Uygulama sürümü'}">v${r.app_version}</span></div>` : ''}</td>
       <td class="col-coin"><b>${r.symbol}</b><div class="sub">${(r.timeframe || '').toUpperCase()}</div></td>
       <td class="col-dir"><span class="badge ${dirBadge}">${r.direction}</span></td>
       <td class="col-pattern">${r.pattern}
@@ -1051,7 +1069,63 @@ function renderCoinSearchResults(data) {
 
 // ============== SİNYAL GÜNLÜĞÜ ==============
 function fetchJournal() {
-  fetch('/api/journal').then(r => r.json()).then(data => renderJournal(data));
+  const v = document.getElementById('journalVersion').value;
+  fetch('/api/journal' + (v ? '?version=' + encodeURIComponent(v) : ''))
+    .then(r => r.json()).then(data => renderJournal(data));
+  fetchVersionStats();
+}
+
+const VERSION_INFO = {
+  version: 'Sinyali üreten uygulama sürümü. Gri etiket: sürüm bilgisi eklenmeden önceki kayıtlar, içerdikleri verilere göre geriye dönük etiketlendi.',
+  period: 'Bu sürümle kaydedilen ilk ve son sinyalin tarihi.',
+  signals: 'Toplam sinyal / açık (henüz sonuçlanmamış) sinyal sayısı.',
+  win: 'Sonuçlanan sinyallerde hedefe ulaşma oranı: hedef / (hedef + stop).',
+  cm: 'Crypto Manager isabeti: Crypto Manager sinyali desteklerken (puan ≥ 65) sonuçlanan sinyallerin hedef oranı. Genel başarı oranından yüksekse endeks işe yarıyor demektir.',
+  market: 'Piyasa Yönü isabeti: piyasa yönü sinyali desteklerken (puan ≥ 65) sonuçlanan sinyallerin hedef oranı.',
+  fundamental: 'Temel Analiz isabeti: temel analiz sinyali desteklerken (puan ≥ 65) sonuçlanan sinyallerin hedef oranı.',
+};
+
+function infoIconText(text) {
+  return `<span class="info" tabindex="0" role="button" aria-label="Açıklama" data-tip="${escapeAttr(text)}">i</span>`;
+}
+
+function rateCell(x, base) {
+  if (!x || x.rate === null || x.rate === undefined) return `<span class="muted">–${x && x.n ? ` (${x.n})` : ''}</span>`;
+  const cls = base !== null && base !== undefined ? (x.rate > base + 2 ? 'up' : x.rate < base - 2 ? 'down' : 'mid') : '';
+  return `<b class="${cls}">%${x.rate.toLocaleString('tr-TR')}</b> <span class="muted">(${x.n})</span>`;
+}
+
+let _versionsLoaded = false;
+function fetchVersionStats() {
+  fetch('/api/journal/versions').then(r => r.json()).then(d => {
+    if (d.ok === false) return;
+    const sel = document.getElementById('journalVersion');
+    if (!_versionsLoaded) {
+      const current = sel.value;
+      sel.innerHTML = '<option value="">Tüm sürümler</option>' + (d.stats || [])
+        .map(v => `<option value="${escapeAttr(v.version)}">v${v.version}${v.version === d.current ? ' (güncel)' : ''} · ${v.total} sinyal</option>`).join('');
+      sel.value = current;
+      _versionsLoaded = true;
+    }
+    const heads = [['version', 'Sürüm'], ['period', 'Dönem'], ['signals', 'Sinyal / açık'], ['win', 'Başarı oranı'],
+                   ['cm', 'Crypto Manager isabeti'], ['market', 'Piyasa Yönü isabeti'], ['fundamental', 'Temel Analiz isabeti']];
+    let html = '<div class="table-scroll"><table><thead><tr>' +
+      heads.map(([k, t]) => `<th>${t} ${infoIconText(VERSION_INFO[k])}</th>`).join('') + '</tr></thead><tbody>';
+    (d.stats || []).forEach(v => {
+      html += `<tr>
+        <td><span class="ver-tag ${v.inferred ? 'inferred' : ''}">v${v.version}</span>${v.version === d.current ? ' <span class="muted">güncel</span>' : ''}
+          <div class="sub muted" style="max-width:320px;">${v.description || ''}</div></td>
+        <td class="muted">${fmtDate(v.first_at)} – ${fmtDate(v.last_at)}</td>
+        <td>${v.total} / ${v.open}</td>
+        <td>${v.win_rate === null ? '<span class="muted">–</span>' : `<b>%${v.win_rate.toLocaleString('tr-TR')}</b> <span class="muted">(${v.hedef}/${v.hedef + v.stop})</span>`}</td>
+        <td>${rateCell(v.cm, v.win_rate)}</td>
+        <td>${rateCell(v.market, v.win_rate)}</td>
+        <td>${rateCell(v.fundamental, v.win_rate)}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div><p class="muted" style="font-size:12px; margin:8px 0 0;">Parantez içi: sonuçlanmış sinyal sayısı. İsabet oranı başarı oranından belirgin yüksekse yeşil, düşükse kırmızı. Güncel sürüm: ' + (d.current ? 'v' + d.current : '-') + (d.commit ? ' (' + d.commit + ')' : '') + '</p>';
+    document.getElementById('versionStatsWrap').innerHTML = html;
+  }).catch(() => {});
 }
 
 function renderJournal(data) {
@@ -1088,7 +1162,8 @@ function refreshJournal() {
 }
 
 function exportJournal() {
-  window.location.href = '/api/journal/export';
+  const v = document.getElementById('journalVersion').value;
+  window.location.href = '/api/journal/export' + (v ? '?version=' + encodeURIComponent(v) : '');
 }
 
 function clearJournal() {

@@ -50,6 +50,7 @@ COLUMNS = [
     ("fundamental_score", "Temel Analiz (/100)", 16),
     ("cm_score", "Crypto Manager (/100)", 18),
     ("rr", "Risk/Ödül", 10),
+    ("app_version", "Sürüm", 10),
 ]
 
 
@@ -143,6 +144,7 @@ JOURNAL_COLUMNS = [
     ("fundamental_score", "Temel Analiz (/100)", 16),
     ("cm_score", "Crypto Manager (/100)", 18),
     ("rr", "Risk/Ödül", 10),
+    ("app_version", "Sürüm", 10),
 ]
 
 STATUS_FILLS = {

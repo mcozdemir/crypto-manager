@@ -18,6 +18,7 @@ import socket
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
+from version import VERSION, CHANGELOG, build_commit
 from db import get_db, DatabaseError, PROJECT_DIR  # noqa: F401  (DatabaseError dışarıya da sunulur)
 
 logger = logging.getLogger("scanner.journal")
@@ -42,6 +43,8 @@ NEW_COLUMNS = [
     ("market_score", "REAL"),       # Piyasa yönü (şimdi) uyum puanı, 0-100
     ("cm_score", "REAL"),           # Crypto Manager uyum puanı, 0-100
     ("fundamental_score", "REAL"),  # Temel analiz uyum puanı, 0-100
+    ("app_version", "TEXT"),        # Sinyalin kaydedildiği uygulama sürümü (version.py)
+    ("app_commit", "TEXT"),         # O sürümün git commit kısaltması (boşsa geriye dönük tahmin)
     ("hist_rate", "REAL"),          # Kayıt anındaki geçmiş başarı oranı (%)
     ("hist_n", "INTEGER"),          # Geçmiş başarı örnek sayısı
     ("rr", "REAL"),                 # Risk/ödül oranı
@@ -81,7 +84,9 @@ def init_db(force: bool = False):
             hist_n INTEGER,
             rr REAL,
             confidence_json TEXT,
-            fundamental_score REAL
+            fundamental_score REAL,
+            app_version TEXT,
+            app_commit TEXT
         )
     """)
     # Göç (migration): sonradan eklenen sütunlar, eski tablolarda yoksa eklenir.
@@ -96,6 +101,15 @@ def init_db(force: bool = False):
         ("""CREATE INDEX IF NOT EXISTS idx_signals_lookup
             ON signals (symbol, timeframe, pattern, direction, status)""", ()),
         ("CREATE INDEX IF NOT EXISTS idx_signals_created ON signals (created_at)", ()),
+        ("CREATE INDEX IF NOT EXISTS idx_signals_version ON signals (app_version)", ()),
+        # Sürüm bilgisi eklenmeden önceki kayıtlar, içerdikleri verilere göre
+        # geriye dönük etiketlenir (app_commit boş kalır = tahmini etiket).
+        ("""UPDATE signals SET app_version='1.0.0'
+            WHERE app_version IS NULL AND confidence_json IS NULL""", ()),
+        ("""UPDATE signals SET app_version='1.2.0'
+            WHERE app_version IS NULL AND confidence_json LIKE '%"fundamental": {%'""", ()),
+        ("""UPDATE signals SET app_version='1.1.0'
+            WHERE app_version IS NULL AND confidence_json IS NOT NULL""", ()),
         # Aynı sinyalin iki kez yazılmasını (ör. ağ hatası sonrası tekrar
         # deneme) veritabanı seviyesinde engeller.
         ("""CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_unique
@@ -110,10 +124,11 @@ INSERT_SQL = """
         (created_at, symbol, timeframe, pattern, direction, entry_price,
          target, stop_loss, score, success_probability, label, status,
          closed_at, close_price, last_checked_at, last_price, source,
-         market_score, cm_score, hist_rate, hist_n, rr, confidence_json, fundamental_score)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         market_score, cm_score, hist_rate, hist_n, rr, confidence_json, fundamental_score,
+         app_version, app_commit)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
-INSERT_COLUMN_COUNT = 24
+INSERT_COLUMN_COUNT = 26
 
 
 def _py(value):
@@ -196,6 +211,7 @@ def record_signals(results: List[Dict]) -> int:
         r.get("rr"), json.dumps(r["confidence"], ensure_ascii=False, default=_py)
         if r.get("confidence") else None,
         r.get("fundamental_score"),
+        VERSION, build_commit(),  # boş metin = commit bilinmiyor; NULL = geriye dönük etiket
     ]] for r in results or []]
     # Eski sürümün bekleyen kayıtlarında yeni sütunlar yok: boş değerle tamamla
     pending = [row + [None] * (INSERT_COLUMN_COUNT - len(row)) for row in _load_pending()]
@@ -274,13 +290,15 @@ def refresh_open_signals(price_lookup: Dict[str, float]) -> Dict[str, int]:
 
 def get_signals(limit: int = 500, symbol: Optional[str] = None,
                 status: Optional[str] = None, timeframe: Optional[str] = None,
-                since: Optional[str] = None, until: Optional[str] = None) -> List[Dict]:
+                since: Optional[str] = None, until: Optional[str] = None,
+                version: Optional[str] = None) -> List[Dict]:
     """
     Kayıtlı sinyalleri en yeniden eskiye döndürür. İsteğe bağlı filtreler:
       symbol    : ör. "BTCUSDT"
       status    : "AÇIK", "HEDEF" veya "STOP"
       timeframe : ör. "4h"
       since/until: ISO tarih (ör. "2026-09-01" veya "2026-09-01T12:00:00")
+      version   : uygulama sürümü (ör. "1.3.0")
     """
     init_db()
     where, args = [], []
@@ -293,6 +311,9 @@ def get_signals(limit: int = 500, symbol: Optional[str] = None,
     if timeframe:
         where.append("timeframe = ?")
         args.append(timeframe)
+    if version:
+        where.append("app_version = ?")
+        args.append(version.lstrip("v"))
     if since:
         where.append("created_at >= ?")
         args.append(since)
@@ -329,15 +350,77 @@ def get_open_signals() -> List[Dict]:
     return get_db().execute("SELECT * FROM signals WHERE status='AÇIK' ORDER BY created_at DESC")
 
 
-def get_summary() -> Dict:
+def get_version_stats() -> Dict:
+    """
+    Sürüm bazında sinyal sonuçları ve endeks isabeti. "Endeks isabeti":
+    ilgili endeks sinyali destekliyorken (puan >= 65) sonuçlanan
+    sinyallerin hedef oranı — bir sürümün endeksi ne kadar işe yarıyor.
+    """
     init_db()
+    rows = get_db().execute("""
+        SELECT COALESCE(app_version, '?') AS version,
+               MIN(created_at) AS first_at, MAX(created_at) AS last_at,
+               COUNT(*) AS total,
+               SUM(CASE WHEN status='AÇIK'  THEN 1 ELSE 0 END) AS open,
+               SUM(CASE WHEN status='HEDEF' THEN 1 ELSE 0 END) AS hedef,
+               SUM(CASE WHEN status='STOP'  THEN 1 ELSE 0 END) AS stop,
+               SUM(CASE WHEN status='HEDEF' AND cm_score >= 65 THEN 1 ELSE 0 END) AS cm_hit,
+               SUM(CASE WHEN status IN ('HEDEF','STOP') AND cm_score >= 65 THEN 1 ELSE 0 END) AS cm_n,
+               SUM(CASE WHEN status='HEDEF' AND market_score >= 65 THEN 1 ELSE 0 END) AS mk_hit,
+               SUM(CASE WHEN status IN ('HEDEF','STOP') AND market_score >= 65 THEN 1 ELSE 0 END) AS mk_n,
+               SUM(CASE WHEN status='HEDEF' AND fundamental_score >= 65 THEN 1 ELSE 0 END) AS fd_hit,
+               SUM(CASE WHEN status IN ('HEDEF','STOP') AND fundamental_score >= 65 THEN 1 ELSE 0 END) AS fd_n,
+               MAX(CASE WHEN app_commit IS NULL THEN 1 ELSE 0 END) AS inferred
+        FROM signals GROUP BY COALESCE(app_version, '?')
+    """)
+    notes = {v: (d, t) for v, d, t in CHANGELOG}
+
+    def rate(hit, n):
+        n = int(n or 0)
+        return {"rate": round(int(hit or 0) / n * 100, 1) if n else None, "n": n}
+
+    stats = []
+    for r in rows:
+        resolved = int(r["hedef"] or 0) + int(r["stop"] or 0)
+        stats.append({
+            "version": r["version"],
+            "released": notes.get(r["version"], (None, None))[0],
+            "description": notes.get(r["version"], (None, None))[1],
+            "first_at": r["first_at"], "last_at": r["last_at"],
+            "total": int(r["total"] or 0), "open": int(r["open"] or 0),
+            "hedef": int(r["hedef"] or 0), "stop": int(r["stop"] or 0),
+            "win_rate": round(int(r["hedef"] or 0) / resolved * 100, 1) if resolved else None,
+            "cm": rate(r["cm_hit"], r["cm_n"]),
+            "market": rate(r["mk_hit"], r["mk_n"]),
+            "fundamental": rate(r["fd_hit"], r["fd_n"]),
+            "inferred": bool(r["inferred"]),
+        })
+
+    def vkey(v):
+        try:
+            return tuple(int(x) for x in v.split("."))
+        except ValueError:
+            return (-1,)
+    stats.sort(key=lambda x: vkey(x["version"]), reverse=True)
+    return {
+        "current": VERSION,
+        "commit": build_commit(),
+        "changelog": [{"version": v, "date": d, "description": t} for v, d, t in CHANGELOG],
+        "stats": stats,
+    }
+
+
+def get_summary(version: Optional[str] = None) -> Dict:
+    init_db()
+    where, args = "", ()
+    if version:
+        where, args = " WHERE app_version = ?", (version.lstrip("v"),)
     row = get_db().execute("""
         SELECT COUNT(*) AS toplam,
                COALESCE(SUM(CASE WHEN status='AÇIK'  THEN 1 ELSE 0 END), 0) AS acik,
                COALESCE(SUM(CASE WHEN status='HEDEF' THEN 1 ELSE 0 END), 0) AS hedef,
                COALESCE(SUM(CASE WHEN status='STOP'  THEN 1 ELSE 0 END), 0) AS stop
-        FROM signals
-    """)[0]
+        FROM signals""" + where, args)[0]
     hit_target, hit_stop = int(row["hedef"]), int(row["stop"])
     resolved = hit_target + hit_stop
     win_rate = round(hit_target / resolved * 100, 1) if resolved > 0 else None

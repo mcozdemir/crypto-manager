@@ -113,6 +113,27 @@ Render → Environment bölümüne `APP_COINGECKO_API_KEY` olarak ekleyin.
 Kilit açılımı (token unlock) takvimi için ücretsiz bir kaynak bulunmadığından
 henüz dahil edilmedi.
 
+## Sürümler ve karşılaştırma
+
+Her sinyal, üretildiği uygulama sürümüyle (`version.py` → `VERSION`) ve git
+commit kısaltmasıyla birlikte sinyal günlüğüne kaydedilir. Sürüm, tablolarda
+tarihin altında (ör. `v1.3.0`) ve sayfa başlığında görünür.
+
+Sinyal Günlüğü'ndeki **Sürüm karşılaştırması** bölümü her sürüm için
+sinyal sayısını, başarı oranını ve endeks isabetini (Crypto Manager / Piyasa
+Yönü / Temel Analiz sinyali desteklerken, yani puan ≥ 65 iken, sonuçlanan
+sinyallerin hedef oranı) gösterir. Sürüm seçici ile günlük ve Excel dışa
+aktarımı tek bir sürüme filtrelenebilir (`/api/journal?version=1.3.0`,
+`/api/journal/versions`).
+
+**Kural:** Sinyal tespiti, puanlama veya tahmin mantığını değiştiren her
+değişiklikte `version.py` içindeki `VERSION` artırılır ve `CHANGELOG`'a satır
+eklenir (büyük değişiklik: 1.3 → 1.4, küçük düzeltme: 1.3.0 → 1.3.1).
+
+Sürüm bilgisi eklenmeden önceki kayıtlar içeriklerine göre geriye dönük
+etiketlendi (gri etiket): güven endeksi olmayanlar `1.0.0`, temel analizi
+olanlar `1.2.0`, diğerleri `1.1.0`.
+
 ## Kullanım
 
 ### 1) Terminal (CLI) modu
@@ -258,6 +279,7 @@ girerek üçünü paralel kullanabilirsiniz.
 | `charts.py` | mplfinance ile mum + trend + breakout + hedef/stop grafiği |
 | `scanner.py` | Tüm süreci orkestre eden tarama motoru |
 | `backtest.py` | Geçmiş veride walk-forward formasyon başarı oranı testi |
+| `version.py` | Uygulama sürümü ve değişiklik günlüğü (CHANGELOG) |
 | `fundamentals.py` | Temel analiz: CoinGecko / GitHub / DefiLlama verisi ve puanlaması |
 | `confidence.py` | Güven endeksleri: geçmiş başarı, piyasa yönü, Crypto Manager, risk/ödül |
 | `journal.py` | Sinyalleri veritabanına kaydeden ve sonucunu takip eden günlük modülü |

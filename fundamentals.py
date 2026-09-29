@@ -309,8 +309,14 @@ def _attach_defi(data: Dict):
     except Exception as exc:  # noqa: BLE001
         logger.debug("DefiLlama alınamadı: %s", exc)
         return
+    # Katman-1 zincirleri (ETH, SOL...) DeFi protokolü değildir; onların
+    # "ücret" verisi zincir ücretleridir ve protokol geliri gibi yorumlanamaz.
+    cats = " ".join(data.get("categories") or []).lower()
+    if "layer 1" in cats or "smart contract platform" in cats:
+        data["defi"] = None
+        return
     p = protocols.get(data.get("cg_id") or "")
-    if not p:
+    if not p or not p.get("tvl"):
         data["defi"] = None
         return
     f = fees.get(data["cg_id"]) or fees.get(p["id"]) or fees.get(p.get("slug") or "") or fees.get(p["name"]) or {}
@@ -464,6 +470,9 @@ def _score_maturity(d: Dict) -> Dict:
 
 def _score_defi(d: Dict) -> Dict:
     defi = d.get("defi")
+    cats = " ".join(d.get("categories") or []).lower()
+    if "layer 1" in cats or "smart contract platform" in cats or (defi and not defi.get("tvl")):
+        defi = None  # L1 zincirleri ve TVL'si olmayanlar DeFi protokolü sayılmaz
     if not defi:
         return {"score": None, "note": "DeFi protokolü değil ya da veri yok"}
     parts, notes = [], []
