@@ -26,6 +26,7 @@ from flask import Flask, jsonify, render_template, request, send_from_directory,
 from scanner import run_scan, scan_single_symbol, top_opportunities, TIMEFRAMES
 from excel_export import build_excel, export_filename, build_journal_excel, journal_export_filename
 import journal
+from db import get_db
 from backtest import run_backtest
 from utils import get_latest_prices
 from market_direction import compute_market_snapshot
@@ -375,17 +376,36 @@ def api_market_direction():
 # --------------------------------------------------------------------------
 # Sinyal Günlüğü API
 # --------------------------------------------------------------------------
+@app.errorhandler(journal.DatabaseError)
+def handle_db_error(exc):
+    return jsonify({"ok": False, "message": f"Sinyal veritabanına erişilemedi: {exc}"}), 502
+
+
 @app.route("/api/journal")
 def api_journal():
-    signals = journal.get_all_signals()
+    # İsteğe bağlı filtreler: ?symbol=BTCUSDT&status=HEDEF&timeframe=4h
+    #                         &since=2026-09-01&until=2026-09-30&limit=1000
+    args = request.args
+    try:
+        limit = max(1, min(int(args.get("limit", 500)), 100000))
+    except ValueError:
+        limit = 500
+    signals = journal.get_signals(
+        limit=limit,
+        symbol=args.get("symbol") or None,
+        status=args.get("status") or None,
+        timeframe=args.get("timeframe") or None,
+        since=args.get("since") or None,
+        until=args.get("until") or None,
+    )
     summary = journal.get_summary()
     return jsonify({"signals": signals, "summary": summary})
 
 
 @app.route("/api/journal/refresh", methods=["POST"])
 def api_journal_refresh():
-    open_signals = journal.get_all_signals()
-    open_symbols = sorted({s["symbol"] for s in open_signals if s["status"] == "AÇIK"})
+    open_signals = journal.get_open_signals()
+    open_symbols = sorted({s["symbol"] for s in open_signals})
     if not open_symbols:
         return jsonify({"ok": True, "message": "Güncellenecek açık sinyal yok.", "stats": {}})
     try:
@@ -430,6 +450,7 @@ if __name__ == "__main__":
     print(f"Kripto Formasyon Tarayıcı - Web Paneli  [{APP_VERSION}]")
     browser_host = "127.0.0.1" if host in ("0.0.0.0", "::") else host
     print(f"Tarayıcınızda şu adresi açın: http://{browser_host}:{port}")
+    print(f"Sinyal günlüğü: {get_db().describe()}")
     print("=" * 70)
     try:
         app.run(host=host, port=port, debug=DEBUG_MODE)

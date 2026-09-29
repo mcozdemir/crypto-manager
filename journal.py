@@ -2,119 +2,194 @@
 """
 journal.py
 ----------
-Her taramada bulunan formasyon sinyallerini kalıcı bir SQLite veritabanına
+Her taramada bulunan formasyon sinyallerini kalıcı bir veritabanına
 kaydeder ve zaman içinde gerçekten hedefe mi yoksa stop'a mı gittiğini
 takip eder. Böylece "Başarı %" tahminimizin gerçek dünyada ne kadar
 isabetli olduğunu ölçmek mümkün olur.
 
-Veritabanı dosyası: signal_journal.db (proje klasöründe, çalışma anında
-otomatik oluşturulur).
+Veritabanı: .env içinde Turso bilgileri varsa ortak bulut veritabanı
+(Turso), yoksa proje klasöründeki signal_journal.db. Ayrıntılar: db.py
 """
 
-import os
-import sqlite3
+import json
 import logging
+import os
+import socket
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
-logger = logging.getLogger("scanner.journal")
+from db import get_db, DatabaseError, PROJECT_DIR  # noqa: F401  (DatabaseError dışarıya da sunulur)
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "signal_journal.db")
+logger = logging.getLogger("scanner.journal")
 
 # Aynı formasyonun her taramada tekrar tekrar kaydedilmesini önlemek için:
 # aynı (symbol, timeframe, pattern, direction) kombinasyonu hâlâ "AÇIK"
 # durumdaysa ve son kayıttan bu yana bu süre geçmediyse yeni satır eklenmez.
 DEDUPE_WINDOW = timedelta(hours=6)
 
+# Sinyali hangi bilgisayarın kaydettiği (birden fazla kişi aynı bulut
+# veritabanını kullandığında ayırt etmek için).
+SOURCE_NAME = socket.gethostname() or "bilinmiyor"
 
-def _connect() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+# Veritabanına ulaşılamadığında sinyallerin geçici olarak tutulduğu dosya.
+PENDING_PATH = os.path.join(PROJECT_DIR, "pending_signals.jsonl")
+
+_initialized = False
 
 
-def init_db():
-    """Veritabanı ve tabloyu (yoksa) oluşturur; eski veritabanlarını göçürür (migration)."""
-    with _connect() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS signals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                created_at TEXT NOT NULL,
-                symbol TEXT NOT NULL,
-                timeframe TEXT NOT NULL,
-                pattern TEXT NOT NULL,
-                direction TEXT NOT NULL,
-                entry_price REAL NOT NULL,
-                target REAL NOT NULL,
-                stop_loss REAL NOT NULL,
-                score REAL,
-                success_probability REAL,
-                label TEXT,
-                status TEXT NOT NULL DEFAULT 'AÇIK',
-                closed_at TEXT,
-                close_price REAL,
-                last_checked_at TEXT,
-                last_price REAL
-            )
-        """)
-        # Göç (migration): "label" sütunu eklenmeden önce oluşturulmuş eski
-        # signal_journal.db dosyaları için sütunu sonradan ekle (varsa hata
-        # vermeden atla). Böylece v1/v2/v3/v4 klasörlerinizdeki mevcut
-        # veritabanları veri kaybı olmadan güncellenir.
-        existing_cols = {row["name"] for row in conn.execute("PRAGMA table_info(signals)").fetchall()}
-        if "label" not in existing_cols:
-            conn.execute("ALTER TABLE signals ADD COLUMN label TEXT")
-        conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_signals_lookup
-            ON signals (symbol, timeframe, pattern, direction, status)
-        """)
-        conn.commit()
+def init_db(force: bool = False):
+    """Tabloyu (yoksa) oluşturur; eski veritabanlarını göçürür (migration)."""
+    global _initialized
+    if _initialized and not force:
+        return
+    db = get_db()
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS signals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            timeframe TEXT NOT NULL,
+            pattern TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            entry_price REAL NOT NULL,
+            target REAL NOT NULL,
+            stop_loss REAL NOT NULL,
+            score REAL,
+            success_probability REAL,
+            label TEXT,
+            status TEXT NOT NULL DEFAULT 'AÇIK',
+            closed_at TEXT,
+            close_price REAL,
+            last_checked_at TEXT,
+            last_price REAL,
+            source TEXT
+        )
+    """)
+    # Göç (migration): sonradan eklenen sütunlar, eski tablolarda yoksa eklenir.
+    existing_cols = {row["name"] for row in db.execute("PRAGMA table_info(signals)")}
+    statements = []
+    if "label" not in existing_cols:
+        statements.append(("ALTER TABLE signals ADD COLUMN label TEXT", ()))
+    if "source" not in existing_cols:
+        statements.append(("ALTER TABLE signals ADD COLUMN source TEXT", ()))
+    statements += [
+        ("""CREATE INDEX IF NOT EXISTS idx_signals_lookup
+            ON signals (symbol, timeframe, pattern, direction, status)""", ()),
+        ("CREATE INDEX IF NOT EXISTS idx_signals_created ON signals (created_at)", ()),
+        # Aynı sinyalin iki kez yazılmasını (ör. ağ hatası sonrası tekrar
+        # deneme) veritabanı seviyesinde engeller.
+        ("""CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_unique
+            ON signals (symbol, timeframe, pattern, direction, created_at)""", ()),
+    ]
+    db.execute_many(statements)
+    _initialized = True
+
+
+INSERT_SQL = """
+    INSERT OR IGNORE INTO signals
+        (created_at, symbol, timeframe, pattern, direction, entry_price,
+         target, stop_loss, score, success_probability, label, status,
+         closed_at, close_price, last_checked_at, last_price, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+"""
+
+
+def _py(value):
+    """numpy sayılarını (np.float64, np.int64...) düz Python değerine çevirir."""
+    if hasattr(value, "item") and not isinstance(value, (str, bytes)):
+        return value.item()
+    return value
+
+
+def _load_pending() -> List[list]:
+    """Daha önce veritabanına yazılamamış (ör. internet kesintisi) sinyaller."""
+    if not os.path.exists(PENDING_PATH):
+        return []
+    rows = []
+    try:
+        with open(PENDING_PATH, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Bekleyen sinyal dosyası okunamadı: %s", exc)
+    return rows
+
+
+def _save_pending(rows: List[list]) -> None:
+    tmp = PENDING_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        for row in rows:
+            fh.write(json.dumps(list(row), ensure_ascii=False) + "\n")
+    os.replace(tmp, PENDING_PATH)
+
+
+def _dedupe(rows: List[list]) -> List[list]:
+    """
+    Aynı formasyon hâlâ 'AÇIK' ve DEDUPE_WINDOW içinde zaten kayıtlıysa
+    satırı atar. Veritabanındaki açık sinyaller tek sorguda okunur.
+    """
+    last_open: Dict[tuple, datetime] = {}
+    for row in get_db().execute("""
+        SELECT symbol, timeframe, pattern, direction, MAX(created_at) AS last_created
+        FROM signals WHERE status='AÇIK'
+        GROUP BY symbol, timeframe, pattern, direction
+    """):
+        try:
+            last_open[(row["symbol"], row["timeframe"], row["pattern"], row["direction"])] = \
+                datetime.fromisoformat(row["last_created"])
+        except Exception:  # noqa: BLE001
+            pass
+
+    kept = []
+    for row in rows:
+        created = datetime.fromisoformat(row[0])
+        key = (row[1], row[2], row[3], row[4])
+        last = last_open.get(key)
+        if last is not None and abs(created - last) < DEDUPE_WINDOW:
+            continue  # çok yakın zamanda zaten kaydedilmiş, atla
+        last_open[key] = created  # aynı partideki tekrarları da engelle
+        kept.append(row)
+    return kept
 
 
 def record_signals(results: List[Dict]) -> int:
     """
     Bir tarama sonucundaki formasyonları günlüğe kaydeder. Aynı formasyon
     hâlâ 'AÇIK' durumda ve DEDUPE_WINDOW içinde zaten kaydedilmişse
-    tekrar eklenmez (spam önleme).
-    Döndürür: yeni eklenen sinyal sayısı.
+    tekrar eklenmez (spam önleme). Tüm yeni kayıtlar tek işlemde yazılır.
+
+    Veritabanına ulaşılamazsa sinyaller kaybolmaz: pending_signals.jsonl
+    dosyasına alınır ve bir sonraki başarılı kayıtta otomatik gönderilir.
+    Döndürür: veritabanına eklenen sinyal sayısı.
     """
-    init_db()
-    now = datetime.now()
-    now_iso = now.isoformat(timespec="seconds")
-    inserted = 0
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    new_rows = [[_py(v) for v in [
+        now_iso, r["symbol"], r["timeframe"], r["pattern"], r["direction"],
+        r["last_price"], r["target"], r["stop_loss"], r.get("score"),
+        r.get("success_probability"), r.get("label"), "AÇIK",
+        None, None, now_iso, r["last_price"], SOURCE_NAME,
+    ]] for r in results or []]
+    pending = _load_pending()
+    if not new_rows and not pending:
+        return 0
 
-    with _connect() as conn:
-        for r in results:
-            existing = conn.execute("""
-                SELECT id, created_at FROM signals
-                WHERE symbol=? AND timeframe=? AND pattern=? AND direction=? AND status='AÇIK'
-                ORDER BY created_at DESC LIMIT 1
-            """, (r["symbol"], r["timeframe"], r["pattern"], r["direction"])).fetchone()
+    try:
+        init_db()
+        rows = _dedupe(pending + new_rows)
+        get_db().execute_many([(INSERT_SQL, row) for row in rows])
+    except DatabaseError as exc:
+        _save_pending(pending + new_rows)
+        logger.warning("Veritabanına yazılamadı, %d sinyal bekleyen listeye alındı: %s",
+                       len(pending) + len(new_rows), exc)
+        raise
 
-            if existing:
-                try:
-                    last_created = datetime.fromisoformat(existing["created_at"])
-                except Exception:  # noqa: BLE001
-                    last_created = now
-                if now - last_created < DEDUPE_WINDOW:
-                    continue  # çok yakın zamanda zaten kaydedilmiş, atla
-
-            conn.execute("""
-                INSERT INTO signals
-                    (created_at, symbol, timeframe, pattern, direction, entry_price,
-                     target, stop_loss, score, success_probability, label, status,
-                     last_checked_at, last_price)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'AÇIK', ?, ?)
-            """, (
-                now_iso, r["symbol"], r["timeframe"], r["pattern"], r["direction"],
-                r["last_price"], r["target"], r["stop_loss"], r.get("score"),
-                r.get("success_probability"), r.get("label"), now_iso, r["last_price"],
-            ))
-            inserted += 1
-        conn.commit()
-
-    logger.info("Günlüğe %d yeni sinyal eklendi.", inserted)
-    return inserted
+    if pending:
+        os.remove(PENDING_PATH)
+        logger.info("Daha önce bekleyen %d sinyal veritabanına gönderildi.", len(pending))
+    logger.info("Günlüğe %d yeni sinyal eklendi (%s).", len(rows), get_db().describe())
+    return len(rows)
 
 
 def refresh_open_signals(price_lookup: Dict[str, float]) -> Dict[str, int]:
@@ -127,77 +202,117 @@ def refresh_open_signals(price_lookup: Dict[str, float]) -> Dict[str, int]:
     aralıklarla çalıştırmanız önerilir.
     """
     init_db()
+    db = get_db()
     now_iso = datetime.now().isoformat(timespec="seconds")
     stats = {"güncellenen": 0, "hedef": 0, "stop": 0}
+    statements = []
 
-    with _connect() as conn:
-        rows = conn.execute("SELECT * FROM signals WHERE status='AÇIK'").fetchall()
-        for row in rows:
-            price = price_lookup.get(row["symbol"])
-            if price is None:
-                continue
+    for row in get_open_signals():
+        price = price_lookup.get(row["symbol"])
+        if price is None:
+            continue
 
-            new_status = None
-            if row["direction"] == "LONG":
-                if price >= row["target"]:
-                    new_status = "HEDEF"
-                elif price <= row["stop_loss"]:
-                    new_status = "STOP"
-            else:
-                if price <= row["target"]:
-                    new_status = "HEDEF"
-                elif price >= row["stop_loss"]:
-                    new_status = "STOP"
+        new_status = None
+        if row["direction"] == "LONG":
+            if price >= row["target"]:
+                new_status = "HEDEF"
+            elif price <= row["stop_loss"]:
+                new_status = "STOP"
+        else:
+            if price <= row["target"]:
+                new_status = "HEDEF"
+            elif price >= row["stop_loss"]:
+                new_status = "STOP"
 
-            if new_status:
-                conn.execute("""
-                    UPDATE signals SET status=?, closed_at=?, close_price=?,
-                        last_checked_at=?, last_price=?
-                    WHERE id=?
-                """, (new_status, now_iso, price, now_iso, price, row["id"]))
-                stats["hedef" if new_status == "HEDEF" else "stop"] += 1
-            else:
-                conn.execute("""
-                    UPDATE signals SET last_checked_at=?, last_price=? WHERE id=?
-                """, (now_iso, price, row["id"]))
-            stats["güncellenen"] += 1
-        conn.commit()
+        if new_status:
+            # status='AÇIK' koşulu: başka bir bilgisayar aynı sinyali bu arada
+            # kapattıysa onun sonucunun üzerine yazılmaz.
+            statements.append(("""
+                UPDATE signals SET status=?, closed_at=?, close_price=?,
+                    last_checked_at=?, last_price=?
+                WHERE id=? AND status='AÇIK'
+            """, (new_status, now_iso, price, now_iso, price, row["id"])))
+            stats["hedef" if new_status == "HEDEF" else "stop"] += 1
+        else:
+            statements.append(("""
+                UPDATE signals SET last_checked_at=?, last_price=?
+                WHERE id=? AND status='AÇIK'
+            """, (now_iso, price, row["id"])))
+        stats["güncellenen"] += 1
 
+    db.execute_many(statements)
     logger.info("Sinyal günlüğü güncellendi: %s", stats)
     return stats
 
 
-def get_all_signals(limit: int = 500) -> List[Dict]:
+def get_signals(limit: int = 500, symbol: Optional[str] = None,
+                status: Optional[str] = None, timeframe: Optional[str] = None,
+                since: Optional[str] = None, until: Optional[str] = None) -> List[Dict]:
+    """
+    Kayıtlı sinyalleri en yeniden eskiye döndürür. İsteğe bağlı filtreler:
+      symbol    : ör. "BTCUSDT"
+      status    : "AÇIK", "HEDEF" veya "STOP"
+      timeframe : ör. "4h"
+      since/until: ISO tarih (ör. "2026-09-01" veya "2026-09-01T12:00:00")
+    """
     init_db()
-    with _connect() as conn:
-        rows = conn.execute("""
-            SELECT * FROM signals ORDER BY created_at DESC LIMIT ?
-        """, (limit,)).fetchall()
-        return [dict(r) for r in rows]
+    where, args = [], []
+    if symbol:
+        where.append("symbol = ?")
+        args.append(symbol.upper())
+    if status:
+        where.append("status = ?")
+        args.append(status)
+    if timeframe:
+        where.append("timeframe = ?")
+        args.append(timeframe)
+    if since:
+        where.append("created_at >= ?")
+        args.append(since)
+    if until:
+        where.append("created_at <= ?")
+        args.append(until)
+    sql = "SELECT * FROM signals"
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
+    args.append(int(limit))
+    return get_db().execute(sql, args)
+
+
+def get_all_signals(limit: int = 500) -> List[Dict]:
+    return get_signals(limit=limit)
+
+
+def get_open_signals() -> List[Dict]:
+    """Tüm 'AÇIK' sinyaller (limit yok)."""
+    init_db()
+    return get_db().execute("SELECT * FROM signals WHERE status='AÇIK' ORDER BY created_at DESC")
 
 
 def get_summary() -> Dict:
     init_db()
-    with _connect() as conn:
-        total = conn.execute("SELECT COUNT(*) c FROM signals").fetchone()["c"]
-        open_count = conn.execute("SELECT COUNT(*) c FROM signals WHERE status='AÇIK'").fetchone()["c"]
-        hit_target = conn.execute("SELECT COUNT(*) c FROM signals WHERE status='HEDEF'").fetchone()["c"]
-        hit_stop = conn.execute("SELECT COUNT(*) c FROM signals WHERE status='STOP'").fetchone()["c"]
-        resolved = hit_target + hit_stop
-        win_rate = round(hit_target / resolved * 100, 1) if resolved > 0 else None
-        return {
-            "toplam": total,
-            "açık": open_count,
-            "hedef": hit_target,
-            "stop": hit_stop,
-            "çözümlenen": resolved,
-            "gerçek_başarı_oranı": win_rate,
-        }
+    row = get_db().execute("""
+        SELECT COUNT(*) AS toplam,
+               COALESCE(SUM(CASE WHEN status='AÇIK'  THEN 1 ELSE 0 END), 0) AS acik,
+               COALESCE(SUM(CASE WHEN status='HEDEF' THEN 1 ELSE 0 END), 0) AS hedef,
+               COALESCE(SUM(CASE WHEN status='STOP'  THEN 1 ELSE 0 END), 0) AS stop
+        FROM signals
+    """)[0]
+    hit_target, hit_stop = int(row["hedef"]), int(row["stop"])
+    resolved = hit_target + hit_stop
+    win_rate = round(hit_target / resolved * 100, 1) if resolved > 0 else None
+    return {
+        "toplam": int(row["toplam"]),
+        "açık": int(row["acik"]),
+        "hedef": hit_target,
+        "stop": hit_stop,
+        "çözümlenen": resolved,
+        "gerçek_başarı_oranı": win_rate,
+    }
 
 
 def clear_journal():
     """Tüm sinyal günlüğünü temizler (geliştirme/test amaçlı)."""
     init_db()
-    with _connect() as conn:
-        conn.execute("DELETE FROM signals")
-        conn.commit()
+    get_db().execute("DELETE FROM signals")

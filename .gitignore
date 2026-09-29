@@ -9,9 +9,16 @@ __pycache__/
 charts/
 *.xlsx
 
+# Sinyal geçmişi artık Turso'da; yerel dosyalar yalnızca yedek/geçici
+signal_journal.db
+pending_signals.jsonl*
+
 # Yedek / geçici klasörler
 work/
 {charts,templates}/
 
 # macOS
 .DS_Store
+
+# Gizli ayarlar (Turso adresi ve token)
+.env

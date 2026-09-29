@@ -758,6 +758,11 @@ function fetchJournal() {
 }
 
 function renderJournal(data) {
+  if (data.ok === false) {
+    document.getElementById('journalTableWrap').innerHTML =
+      `<div class="empty-state" style="color:var(--red);">${data.message}</div>`;
+    return;
+  }
   const s = data.summary || {};
   const statsWrap = document.getElementById('journalStats');
   statsWrap.innerHTML = `
@@ -820,7 +825,7 @@ function exportJournal() {
 }
 
 function clearJournal() {
-  if (!confirm('Tüm sinyal günlüğü kalıcı olarak silinecek. Emin misiniz?')) return;
+  if (!confirm('Tüm sinyal günlüğü kalıcı olarak silinecek. Ortak (bulut) veritabanı kullanılıyorsa bu işlem projeyi kullanan HERKES için geçmişi siler. Emin misiniz?')) return;
   fetch('/api/journal/clear', { method: 'POST' }).then(r => r.json()).then(() => fetchJournal());
 }
 </script>

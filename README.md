@@ -7,10 +7,38 @@ zaman dilimlerinde tarayıp 10 klasik grafik formasyonunu (5 yükseliş,
 ## Kurulum
 
 ```bash
-python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env           # ardından .env içindeki Turso bilgilerini doldurun
 ```
+
+Sanal ortamın adı `.venv` olmalıdır; macOS'taki çift tıklamalı başlatıcı
+(`Kripto Tarayıcıyı Başlat.command`) bu klasörü arar.
+
+### Sinyal veritabanı (Turso)
+
+Sinyal geçmişi ortak bir bulut veritabanında (Turso / libSQL) tutulur;
+projeyi kullanan herkes aynı geçmişi görür ve günceller. Bağlantı
+bilgileri proje klasöründeki `.env` dosyasından okunur (bu dosya Git'e
+**gönderilmez**, her geliştirici kendi kopyasını oluşturur):
+
+```dotenv
+APP_TURSO_TECH_DB_URL=libsql://<veritabani>-<kullanici>.turso.io
+APP_TURSO_TECH_TOKEN=<turso erişim anahtarı>
+```
+
+- `.env` yoksa veya değerler boşsa program yerel `signal_journal.db`
+  (SQLite) dosyasıyla çalışır.
+- Ek paket gerekmez; Turso'ya HTTP API üzerinden bağlanılır (`db.py`).
+- Tarama sırasında Turso'ya ulaşılamazsa sinyaller kaybolmaz:
+  `pending_signals.jsonl` dosyasında bekletilir ve bir sonraki başarılı
+  kayıtta otomatik gönderilir.
+- Eski yerel `signal_journal.db` içeriğini Turso'ya aktarmak için:
+  `.venv/bin/python migrate_to_turso.py` (tekrar çalıştırmak güvenlidir,
+  aynı sinyal iki kez eklenmez).
+- Uygulama açılırken terminalde hangi veritabanının kullanıldığı yazar
+  (`Sinyal günlüğü: Turso bulut veritabanı (...)`).
 
 ## Kullanım
 
@@ -97,14 +125,24 @@ ve ortalama çözülme süresini gösteren bir özet tablo üretir.
 
 ### 6) Sinyal Günlüğü
 Her canlı tarama (ve Coin Ara ile bulunan aktif sinyaller), bulduğu
-sinyalleri otomatik olarak `signal_journal.db` (SQLite) dosyasına
-kaydeder — **Skor, Başarı Olasılığı % ve Güven (etiket) bilgileriyle
+sinyalleri otomatik olarak sinyal veritabanına (Turso; `.env` yoksa
+yerel `signal_journal.db`) kaydeder — **Skor, Başarı Olasılığı % ve Güven (etiket) bilgileriyle
 birlikte**. Üst menüden **"Sinyal Günlüğü"** sekmesine geçip **"🔄
 Fiyatları Güncelle"**ye tıklayarak açık sinyallerin anlık fiyatlarla
 hedefe mi stop'a mı ulaştığını kontrol edebilirsiniz. Sayfa üstünde
 toplam sinyal, açık, hedef vuran, stop vuran ve **gerçek başarı oranı**
 özetlenir. **"⬇ Excel'e Aktar"** ile tüm günlüğü dışa aktarabilir,
-**"🗑 Günlüğü Temizle"** ile sıfırlayabilirsiniz.
+**"🗑 Günlüğü Temizle"** ile sıfırlayabilirsiniz (dikkat: ortak bulut
+veritabanında bu işlem herkes için geçmişi siler).
+
+Kayıtlı sinyaller API üzerinden filtrelenerek de okunabilir:
+
+```
+/api/journal?symbol=BTCUSDT&status=HEDEF&timeframe=4h&since=2026-09-01&until=2026-09-30&limit=1000
+```
+
+Python'dan: `journal.get_signals(symbol="BTCUSDT", status="HEDEF", since="2026-09-01")`.
+Her kayıtta sinyali hangi bilgisayarın kaydettiği `source` sütununda tutulur.
 
 ## Birden fazla versiyonu aynı anda çalıştırma (A/B/C karşılaştırması)
 
@@ -115,8 +153,10 @@ Projeyi `crypto_pattern_scanner`, `crypto_pattern_scannerv2`,
 - **Panel başlığı otomatik olarak klasör adını gösterir** (ör.
   "crypto_pattern_scannerv2"), Excel dosya adlarına da otomatik eklenir
   — hangi dosyanın hangi versiyondan geldiğini karıştırmazsınız.
-- **Her klasörün kendi `signal_journal.db`'si vardır**, sinyaller
-  birbirine karışmaz.
+- **Sinyal veritabanı:** Aynı `.env` (Turso) bilgilerini kullanan tüm
+  kopyalar aynı sinyal geçmişine yazar. Kopyaların sinyallerini ayrı
+  tutmak istiyorsanız her birine ayrı bir Turso veritabanı tanımlayın
+  veya `.env` olmadan yerel `signal_journal.db` ile çalıştırın.
 - **Aynı anda çalıştırmak için farklı portlar kullanın** (varsayılan
   5000, ikinci ve üçüncü kopya için port çakışması olur). PowerShell'de:
 
@@ -145,7 +185,9 @@ girerek üçünü paralel kullanabilirsiniz.
 | `charts.py` | mplfinance ile mum + trend + breakout + hedef/stop grafiği |
 | `scanner.py` | Tüm süreci orkestre eden tarama motoru |
 | `backtest.py` | Geçmiş veride walk-forward formasyon başarı oranı testi |
-| `journal.py` | Sinyalleri SQLite'a kaydeden ve sonucunu takip eden günlük modülü |
+| `journal.py` | Sinyalleri veritabanına kaydeden ve sonucunu takip eden günlük modülü |
+| `db.py` | Veritabanı katmanı: Turso (bulut) veya yerel SQLite, `.env` okuma |
+| `migrate_to_turso.py` | Yerel `signal_journal.db` geçmişini Turso'ya aktaran tek seferlik betik |
 | `market_direction.py` | BTC/TOTAL/TOTAL2/BTC.D'yi birlikte değerlendirip piyasa rejimini belirleyen modül |
 | `excel_export.py` | Tarama sonuçlarını biçimlendirilmiş .xlsx'e aktarma |
 | `main.py` | CLI giriş noktası |
