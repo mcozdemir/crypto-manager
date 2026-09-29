@@ -64,7 +64,7 @@
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   #exportBtn { background: var(--green); }
 
-  main { padding: 20px 28px 60px; max-width: 1400px; margin: 0 auto; }
+  main { padding: 20px 28px 60px; max-width: 1640px; margin: 0 auto; }
 
   .status-bar {
     background: var(--panel);
@@ -181,13 +181,62 @@
   .badge.medium { background: rgba(245,166,35,0.18); color: var(--amber); }
   .badge.verystrong { background: rgba(79,142,247,0.18); color: var(--blue); }
 
-  .chart-row { display: none; }
-  .chart-row td { background: var(--panel); padding: 16px; }
-  .chart-row img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); }
   .chart-meta { display: flex; gap: 24px; margin-top: 10px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
   .chart-meta b { color: var(--text); }
 
   .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  /* ---- Ortak sinyal tablosu ---- */
+  .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .signal-table { min-width: 1280px; }
+  .signal-table th { white-space: nowrap; padding: 10px 8px; }
+  .signal-table td { vertical-align: top; padding: 10px 8px; }
+  .signal-table .col-pattern { min-width: 150px; }
+  .signal-table .sub { font-size: 11px; margin-top: 3px; color: var(--text); }
+  .signal-table small, .mini small { color: var(--muted); font-weight: 400; }
+  .muted, .signal-table .muted, .signal-table .sub.muted { color: var(--muted); }
+  .up { color: var(--green); } .down { color: var(--red); } .mid { color: var(--amber); }
+  .sc { font-weight: 700; white-space: nowrap; }
+  .sc-good { color: var(--green); } .sc-mid { color: var(--amber); } .sc-bad { color: var(--red); }
+  .sc-na { color: var(--muted); }
+  .st { font-weight: 700; white-space: nowrap; }
+  .st-win { color: var(--green); } .st-loss { color: var(--red); }
+  .st-new { color: var(--blue); } .st-open { color: var(--muted); }
+  .ai-btn { padding: 4px 9px; font-size: 13px; background: var(--panel-2); border: 1px solid var(--border); }
+  .info {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; border-radius: 50%; margin-left: 3px;
+    border: 1px solid var(--muted); color: var(--muted);
+    font: 700 10px/1 Georgia, serif; font-style: italic; cursor: help; vertical-align: 1px;
+  }
+  .info:hover, .info:focus { color: var(--text); border-color: var(--text); outline: none; }
+  #tooltip {
+    display: none; position: fixed; z-index: 1000; padding: 10px 12px; pointer-events: none;
+    background: #0b0d12; color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; font-size: 12px; line-height: 1.5; font-weight: 400;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.45); white-space: normal; text-align: left;
+  }
+  .detail-row { display: none; }
+  .detail-row > td { background: var(--panel); padding: 16px; }
+  .detail-grid { position: sticky; left: 16px; max-width: min(1500px, calc(100vw - 72px)); }
+  .detail-grid { display: flex; gap: 18px; flex-wrap: wrap; }
+  .detail-chart { flex: 1 1 520px; min-width: 0; }
+  .detail-chart img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); }
+  .detail-blocks { flex: 1 1 380px; display: grid; gap: 12px; align-content: start; }
+  .dblock { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .dblock h4 { margin: 0 0 8px; font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
+  .dblock p { margin: 4px 0; font-size: 12px; }
+  .dblock .sub { font-size: 12px; margin-top: 4px; }
+  table.mini { font-size: 12px; }
+  table.mini td { padding: 5px 4px; border-bottom: 1px solid var(--border); }
+  table.mini tr:last-child td { border-bottom: 0; }
+  table.mini td.num { text-align: right; white-space: nowrap; }
+  table.mini tbody tr { cursor: default; }
+  @media (max-width: 900px) {
+    main { padding: 14px 12px 40px; }
+    .signal-table .col-coin { position: sticky; left: 0; z-index: 2; background: var(--bg); min-width: 110px; }
+    .signal-table .col-dir { position: sticky; left: 110px; z-index: 2; background: var(--bg); }
+    .signal-table thead .col-coin, .signal-table thead .col-dir { z-index: 3; }
+  }
 </style>
 </head>
 <body>
@@ -358,6 +407,267 @@
   };
 })();
 
+// ============== ORTAK SİNYAL TABLOSU (Tarama / Coin Ara / Sinyal Günlüğü) ==============
+// Tüm puanlar sinyalin YÖNÜNE göredir: yüksek puan = veri bu LONG/SHORT sinyalini destekliyor.
+
+const COLUMN_INFO = {
+  date: 'Sinyalin tespit edildiği an. Tarama sonuçlarında tarama zamanı, Sinyal Günlüğü\'nde kayıt zamanı.',
+  coin: 'Binance spot paritesi ve formasyonun bulunduğu zaman dilimi. 1H = saatlik, 4H = 4 saatlik, 1D = günlük mumlar.',
+  dir: 'LONG: fiyatın yükselmesi beklenir (alış pozisyonu). SHORT: fiyatın düşmesi beklenir (açığa satış). Tablodaki tüm puanlar bu yöne göre hesaplanır; aynı piyasa verisi LONG için düşük, SHORT için yüksek puan üretebilir.',
+  pattern: 'Tespit edilen grafik formasyonu ve 100 üzerinden kalite skoru (geometri, hacim, kırılım, trend, volatilite, momentum). "Geçmiş" yüzdesi: aynı formasyon + zaman dilimi + yöndeki geçmiş sinyallerin kaçının stop\'tan önce hedefe ulaştığı. Parantezdeki sayı sonuçlanmış sinyal adedidir; 10\'dan azsa "veri az" yazar.',
+  market: 'Genel kripto piyasasının bu sinyalin yönünü ne kadar desteklediği (100 üzerinden). Şimdi: TOTAL ve TOTAL2 (BTC hariç piyasa) 24 saatlik değişimi + BTC günlük trendi. Düşen piyasa SHORT için yüksek, LONG için düşük puan verir. 1 haftalık tahmin yakında eklenecek.',
+  fundamental: 'Coinin temel verileri: whitepaper, geliştirme aktivitesi, token ekonomisi (dolaşımdaki arz, FDV), kilit açılımları, protokol geliri. Yakında eklenecek.',
+  cm: 'Crypto Manager puanı (100 üzerinden), 4 bileşenin ağırlıklı birleşimi: zaman dilimi uyumu (1H/4H/1D trendleri sinyal yönünde mi), BTC\'ye karşı göreli güç, likidite (hacim ve alış-satış farkı) ve türev piyasa (fonlama oranı, açık pozisyon, long/short oranı). Ağırlıklar zaman dilimine göre değişir. Ayrıntılar için satıra tıklayın.',
+  entry: 'Sinyalin tespit edildiği andaki fiyat.',
+  current: 'Son bilinen fiyat ve girişe göre değişimi. Yeşil = sinyal yönünde (LONG\'da yükseliş, SHORT\'ta düşüş), kırmızı = ters yönde. Günlükte "Fiyatları Güncelle" ile yenilenir.',
+  target: 'Kâr al seviyesi: formasyonun ölçülen hareket boyuna göre hesaplanır. Yanındaki yüzde, girişe uzaklığıdır.',
+  stop: 'Zarar kes seviyesi: fiyat buraya ulaşırsa formasyon geçersiz sayılır. Yanındaki yüzde, girişe uzaklığıdır.',
+  rr: 'Risk/Ödül: hedefe olan mesafenin stop\'a olan mesafeye oranı. 1 : 2 = 1 birim riske karşı 2 birim potansiyel kazanç. 1 : 1\'in altı genellikle elverişsiz kabul edilir.',
+  status: 'Yeni: bu taramada bulundu. Açık: takipte. Hedef: fiyat stop\'tan önce hedefe ulaştı. Stop: zarar kes seviyesine ulaştı.',
+  ai: 'Satırdaki coin için tüm verileri yapay zekâya yorumlatır. Yakında eklenecek.',
+};
+
+const SIGNAL_COLUMNS = [
+  ['date', 'Tarih'], ['coin', 'Coin · TF'], ['dir', 'Yön'], ['pattern', 'Formasyon'],
+  ['market', 'Piyasa Yönü'], ['fundamental', 'Temel Analiz'], ['cm', 'Crypto Manager'],
+  ['entry', 'Giriş'], ['current', 'Güncel Fiyat'], ['target', 'Hedef'], ['stop', 'Stop'],
+  ['rr', 'Risk/Ödül'], ['status', 'Durum'], ['ai', 'AI'],
+];
+
+function infoIcon(key) {
+  const text = COLUMN_INFO[key] || '';
+  return `<span class="info" tabindex="0" role="button" aria-label="Açıklama" data-tip="${escapeAttr(text)}">i</span>`;
+}
+
+function escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function fmtPrice(v) {
+  if (v === null || v === undefined || isNaN(v)) return '-';
+  const n = Number(v);
+  const abs = Math.abs(n);
+  const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : abs >= 0.01 ? 6 : 8;
+  return n.toLocaleString('tr-TR', { minimumFractionDigits: Math.min(2, digits), maximumFractionDigits: digits });
+}
+
+function fmtPct(v, withSign = true) {
+  if (v === null || v === undefined || isNaN(v)) return '';
+  const n = Number(v);
+  return (withSign && n > 0 ? '+' : n < 0 ? '−' : '') + '%' + Math.abs(n).toLocaleString('tr-TR', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+}
+
+function fmtDate(iso) {
+  if (!iso) return '-';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso.replace('T', ' ').slice(0, 16);
+  return d.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function scoreClass(score) {
+  if (score === null || score === undefined) return 'sc-na';
+  if (score >= 65) return 'sc-good';
+  if (score >= 45) return 'sc-mid';
+  return 'sc-bad';
+}
+
+function scoreCell(score, title) {
+  if (score === null || score === undefined) return '<span class="sc sc-na">–</span>';
+  const icon = score >= 65 ? '✓' : score >= 45 ? '~' : '✗';
+  return `<span class="sc ${scoreClass(score)}" ${title ? `title="${escapeAttr(title)}"` : ''}>${icon} ${Math.round(score)}<small>/100</small></span>`;
+}
+
+function historyText(h, fallbackRate, fallbackN) {
+  const rate = h ? h.rate : fallbackRate;
+  const n = h ? h.n : fallbackN;
+  if (rate === null || rate === undefined) {
+    return `<span class="muted">Geçmiş: veri az${n ? ` (${n})` : ''}</span>`;
+  }
+  const cls = rate >= 60 ? 'up' : rate >= 45 ? 'mid' : 'down';
+  return `Geçmiş <b class="${cls}">%${Number(rate).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}</b> <span class="muted">(${n} sinyal)</span>`;
+}
+
+// Tarama/Coin Ara sonucu ve günlük kaydını aynı biçime getirir
+function normalizeScanRow(r) {
+  const c = r.confidence || {};
+  return {
+    date: r.detected_at, symbol: r.symbol, timeframe: r.timeframe, direction: r.direction,
+    pattern: r.pattern, score: r.score, label: r.label, success_probability: r.success_probability,
+    conf: c, hist_rate: r.hist_rate, hist_n: r.hist_n,
+    entry: r.last_price, current: r.last_price, target: r.target, stop: r.stop_loss,
+    rr: c.rr, target_pct: c.target_pct, stop_pct: c.stop_pct,
+    status: 'YENİ', chart_path: r.chart_path, breakdown: r.score_breakdown,
+    breakout: r.breakout, volume_desc: r.volume_desc, fake_breakout_risk: r.fake_breakout_risk,
+    breakout_level: r.breakout_level,
+  };
+}
+
+function normalizeJournalRow(s) {
+  const c = s.confidence || {};
+  const pct = (a, b) => (a && b ? (a / b - 1) * 100 : null);
+  return {
+    date: s.created_at, symbol: s.symbol, timeframe: s.timeframe, direction: s.direction,
+    pattern: s.pattern, score: s.score, label: s.label, success_probability: s.success_probability,
+    conf: c, hist_rate: s.hist_rate, hist_n: s.hist_n,
+    entry: s.entry_price, current: s.status === 'AÇIK' ? s.last_price : (s.close_price ?? s.last_price),
+    target: s.target, stop: s.stop_loss,
+    rr: s.rr ?? c.rr, target_pct: c.target_pct ?? pct(s.target, s.entry_price),
+    stop_pct: c.stop_pct ?? pct(s.stop_loss, s.entry_price),
+    status: s.status, closed_at: s.closed_at, source: s.source,
+  };
+}
+
+function statusCell(st) {
+  if (st === 'HEDEF') return '<span class="st st-win">✓ Hedef</span>';
+  if (st === 'STOP') return '<span class="st st-loss">✗ Stop</span>';
+  if (st === 'YENİ') return '<span class="st st-new">● Yeni</span>';
+  return '<span class="st st-open">⏳ Açık</span>';
+}
+
+function renderSignalTable(rows, group, opts = {}) {
+  if (!rows || rows.length === 0) {
+    return `<div class="empty-state">${opts.empty || 'Sonuç bulunamadı.'}</div>`;
+  }
+  let html = '<div class="table-scroll"><table class="signal-table"><thead><tr>';
+  SIGNAL_COLUMNS.forEach(([key, title]) => {
+    html += `<th class="col-${key}">${title} ${infoIcon(key)}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  rows.forEach((r, i) => {
+    const c = r.conf || {};
+    const dirBadge = r.direction === 'LONG' ? 'long' : 'short';
+    const sign = r.direction === 'LONG' ? 1 : -1;
+    const curPct = r.entry && r.current ? (r.current / r.entry - 1) * 100 : null;
+    const curCls = curPct === null || Math.abs(curPct) < 0.05 ? 'muted' : (curPct * sign > 0 ? 'up' : 'down');
+    const market = c.market || {};
+    const cm = c.cm || {};
+    const marketScore = market.score ?? r.market_score;
+    const cmScore = cm.score ?? r.cm_score;
+
+    html += `<tr class="sig-row" onclick="toggleDetail('${group}', ${i})">
+      <td class="col-date muted">${fmtDate(r.date)}</td>
+      <td class="col-coin"><b>${r.symbol}</b><div class="sub">${(r.timeframe || '').toUpperCase()}</div></td>
+      <td class="col-dir"><span class="badge ${dirBadge}">${r.direction}</span></td>
+      <td class="col-pattern">${r.pattern}
+        ${r.score != null ? `<div class="sub">Skor <b>${Math.round(r.score)}</b><small>/100</small></div>` : ''}
+        <div class="sub">${historyText(c.history, r.hist_rate, r.hist_n)}</div></td>
+      <td class="col-market"><div><span class="muted">Şimdi</span> ${scoreCell(marketScore, market.regime)}</div>
+        <div class="sub muted">1 hafta: yakında</div></td>
+      <td class="col-fundamental"><span class="muted">yakında</span></td>
+      <td class="col-cm">${scoreCell(cmScore)}</td>
+      <td class="col-entry">${fmtPrice(r.entry)}</td>
+      <td class="col-current">${fmtPrice(r.current)}<div class="sub ${curCls}">${curPct === null || Math.abs(curPct) < 0.05 ? '' : fmtPct(curPct)}</div></td>
+      <td class="col-target">${fmtPrice(r.target)}<div class="sub muted">${fmtPct(r.target_pct)}</div></td>
+      <td class="col-stop">${fmtPrice(r.stop)}<div class="sub muted">${fmtPct(r.stop_pct)}</div></td>
+      <td class="col-rr">${r.rr ? `<span class="${r.rr >= 1.5 ? 'up' : r.rr >= 1 ? 'mid' : 'down'}">1 : ${Number(r.rr).toLocaleString('tr-TR', { maximumFractionDigits: 1, minimumFractionDigits: 1 })}</span>` : '-'}</td>
+      <td class="col-status">${statusCell(r.status)}</td>
+      <td class="col-ai"><button class="ai-btn" disabled title="Yakında" onclick="event.stopPropagation()">🔍</button></td>
+    </tr>
+    <tr class="detail-row" id="detail-${group}-${i}"><td colspan="${SIGNAL_COLUMNS.length}">${detailHtml(r)}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  return html;
+}
+
+function detailHtml(r) {
+  const c = r.conf || {};
+  const cm = c.cm || {};
+  const market = c.market || {};
+  const hist = c.history;
+  let html = '<div class="detail-grid">';
+
+  if (r.chart_path) {
+    html += `<div class="detail-chart"><img loading="lazy" src="/charts/${r.chart_path.split('/').pop()}" /></div>`;
+  }
+
+  html += '<div class="detail-blocks">';
+  // Crypto Manager bileşenleri
+  html += `<div class="dblock"><h4>Crypto Manager ${scoreCell(cm.score ?? r.cm_score)}</h4>`;
+  if (cm.components && cm.components.length) {
+    html += '<table class="mini"><tbody>';
+    cm.components.forEach(comp => {
+      html += `<tr><td>${comp.name}<div class="sub muted">${comp.note || ''}</div></td>
+        <td class="num">${scoreCell(comp.score)}<div class="sub muted">${comp.verdict} · ağırlık %${Math.round(comp.weight * 100)}</div></td></tr>`;
+    });
+    html += '</tbody></table>';
+  } else {
+    html += '<p class="muted">Bu kayıt güven endeksleri eklenmeden önce oluşturulmuş.</p>';
+  }
+  html += '</div>';
+
+  // Piyasa yönü
+  html += `<div class="dblock"><h4>Piyasa Yönü (şimdi) ${scoreCell(market.score ?? r.market_score)}</h4>`;
+  if (market.regime) html += `<p><b>${market.regime}</b></p>`;
+  (market.notes || []).forEach(n => { html += `<div class="sub muted">• ${n}</div>`; });
+  if (!market.notes) html += '<p class="muted">Veri yok.</p>';
+  html += '</div>';
+
+  // Formasyon
+  html += `<div class="dblock"><h4>Formasyon · ${r.pattern}</h4>`;
+  if (r.breakdown) {
+    const names = { geometry: ['Geometri', 30], volume: ['Hacim', 20], breakout: ['Kırılım', 20],
+                    trend: ['Trend uyumu', 15], atr: ['Volatilite (ATR)', 10], momentum: ['Momentum', 5] };
+    html += '<table class="mini"><tbody>';
+    Object.entries(names).forEach(([k, [label, max]]) => {
+      if (r.breakdown[k] !== undefined) html += `<tr><td>${label}</td><td class="num">${Number(r.breakdown[k]).toFixed(1)} / ${max}</td></tr>`;
+    });
+    html += '</tbody></table>';
+  }
+  if (r.success_probability != null) html += `<div class="sub">Tahmini başarı: <b>%${r.success_probability}</b>${r.label ? ` · ${r.label}` : ''}</div>`;
+  if (hist) html += `<div class="sub">Geçmiş başarı kapsamı: ${hist.scope}${hist.rate !== null ? ` · ${hist.hedef} hedef / ${hist.stop} stop` : ''}</div>`;
+  if (r.fake_breakout_risk) html += `<div class="sub">Sahte kırılım riski: <b>${r.fake_breakout_risk}</b> · Hacim: ${r.volume_desc || '-'}</div>`;
+  if (r.closed_at) html += `<div class="sub">Kapanış: ${fmtDate(r.closed_at)}</div>`;
+  if (r.source) html += `<div class="sub muted">Kaydeden: ${r.source}</div>`;
+  html += '</div>';
+
+  html += '</div></div>';
+  return html;
+}
+
+function toggleDetail(group, i) {
+  const row = document.getElementById(`detail-${group}-${i}`);
+  if (!row) return;
+  row.style.display = row.style.display === 'table-row' ? 'none' : 'table-row';
+}
+
+// Başlıklardaki (i) ikonları için tek, sayfaya sabitlenmiş ipucu kutusu
+// (tablo yatay kaydırılsa bile kırpılmaz; dokunmatik ekranda dokunarak açılır)
+(function setupTooltips() {
+  const tip = document.createElement('div');
+  tip.id = 'tooltip';
+  tip.setAttribute('role', 'tooltip');
+  document.addEventListener('DOMContentLoaded', () => document.body.appendChild(tip));
+  let current = null;
+
+  function show(el) {
+    current = el;
+    tip.textContent = el.dataset.tip;
+    tip.style.display = 'block';
+    const r = el.getBoundingClientRect();
+    const w = Math.min(320, window.innerWidth - 24);
+    tip.style.width = w + 'px';
+    let left = r.left + r.width / 2 - w / 2;
+    left = Math.max(12, Math.min(left, window.innerWidth - w - 12));
+    tip.style.left = left + 'px';
+    const below = r.bottom + 8;
+    const h = tip.offsetHeight;
+    tip.style.top = (below + h > window.innerHeight - 8 ? r.top - h - 8 : below) + 'px';
+  }
+  function hide() { current = null; tip.style.display = 'none'; }
+
+  document.addEventListener('mouseover', e => { const el = e.target.closest('.info'); if (el) show(el); });
+  document.addEventListener('mouseout', e => { if (e.target.closest('.info')) hide(); });
+  document.addEventListener('focusin', e => { const el = e.target.closest('.info'); if (el) show(el); });
+  document.addEventListener('focusout', e => { if (e.target.closest('.info')) hide(); });
+  document.addEventListener('click', e => {
+    const el = e.target.closest('.info');
+    if (el) { e.stopPropagation(); current === el ? hide() : show(el); }
+    else if (current) hide();
+  }, true);
+  window.addEventListener('scroll', hide, true);
+})();
+
 let currentTab = 'all';
 let lastData = { results: [], top_long: [], top_short: [] };
 let polling = null;
@@ -409,7 +719,7 @@ function poll() {
 function stageLabelText(stage) {
   const map = {
     idle: 'Hazır', starting: 'Başlatılıyor', symbols: 'Coin listesi hazırlanıyor',
-    scanning: 'Taranıyor', done: 'Tamamlandı', error: 'Hata'
+    scanning: 'Taranıyor', confidence: 'Güven endeksleri hesaplanıyor', done: 'Tamamlandı', error: 'Hata'
   };
   return map[stage] || stage;
 }
@@ -434,51 +744,10 @@ function renderTable() {
   let rows = currentTab === 'all' ? lastData.results
             : currentTab === 'long' ? lastData.top_long
             : lastData.top_short;
-
-  if (!rows || rows.length === 0) {
-    wrap.innerHTML = '<div class="empty-state">Bu kategoride sonuç bulunamadı.</div>';
-    return;
-  }
-
-  let html = `<table><thead><tr>
-    <th>Coin</th><th>TF</th><th>Formasyon</th><th>Yön</th><th>Skor</th>
-    <th>Başarı %</th><th>Breakout</th><th>Hacim</th><th>Güven</th>
-  </tr></thead><tbody>`;
-
-  rows.forEach((r, i) => {
-    const dirBadge = r.direction === 'LONG' ? 'long' : 'short';
-    html += `<tr onclick="toggleChart(${i}, '${currentTab}')">
-      <td><b>${r.symbol}</b></td>
-      <td>${r.timeframe.toUpperCase()}</td>
-      <td>${r.pattern}</td>
-      <td><span class="badge ${dirBadge}">${r.direction}</span></td>
-      <td>${r.score}</td>
-      <td>${r.success_probability}%</td>
-      <td>${r.breakout}</td>
-      <td>${r.volume_desc}</td>
-      <td><span class="badge ${badgeForLabel(r.label)}">${r.label}</span></td>
-    </tr>
-    <tr class="chart-row" id="chart-${currentTab}-${i}"><td colspan="9">
-      ${r.chart_path ? `<img src="/charts/${r.chart_path.split('/').pop()}" />` : '<i>Grafik oluşturulamadı.</i>'}
-      <div class="chart-meta">
-        <span>Güncel Fiyat: <b>${r.last_price}</b></span>
-        <span>Breakout Seviyesi: <b>${r.breakout_level ? r.breakout_level.toFixed(6) : '-'}</b></span>
-        <span>Hedef: <b>${r.target ? r.target.toFixed(6) : '-'}</b></span>
-        <span>Stop Loss: <b>${r.stop_loss ? r.stop_loss.toFixed(6) : '-'}</b></span>
-        <span>Fake Breakout Riski: <b>${r.fake_breakout_risk || '-'}</b></span>
-      </div>
-    </td></tr>`;
-  });
-
-  html += '</tbody></table>';
-  wrap.innerHTML = html;
+  wrap.innerHTML = renderSignalTable((rows || []).map(normalizeScanRow), 'scan-' + currentTab,
+                                     { empty: 'Bu kategoride sonuç bulunamadı.' });
 }
 
-function toggleChart(i, tab) {
-  const row = document.getElementById(`chart-${tab}-${i}`);
-  if (!row) return;
-  row.style.display = row.style.display === 'table-row' ? 'none' : 'table-row';
-}
 
 // ============== GÖRÜNÜM (VIEW) YÖNETİMİ ==============
 function switchView(view) {
@@ -705,30 +974,6 @@ function fetchCoinSearchResults() {
   fetch('/api/coin-search/results').then(r => r.json()).then(data => renderCoinSearchResults(data));
 }
 
-function _csRow(r, i, group) {
-  const dirBadge = r.direction === 'LONG' ? 'long' : 'short';
-  return `<tr onclick="toggleChart(${i}, '${group}')">
-      <td>${r.timeframe.toUpperCase()}</td>
-      <td>${r.pattern}</td>
-      <td><span class="badge ${dirBadge}">${r.direction}</span></td>
-      <td>${r.score}</td>
-      <td>${r.success_probability}%</td>
-      <td>${r.breakout}</td>
-      <td>${r.volume_desc}</td>
-      <td><span class="badge ${badgeForLabel(r.label)}">${r.label}</span></td>
-    </tr>
-    <tr class="chart-row" id="chart-${group}-${i}"><td colspan="8">
-      ${r.chart_path ? `<img src="/charts/${r.chart_path.split('/').pop()}" />` : '<i>Grafik oluşturulamadı.</i>'}
-      <div class="chart-meta">
-        <span>Güncel Fiyat: <b>${r.last_price}</b></span>
-        <span>Breakout Seviyesi: <b>${r.breakout_level ? r.breakout_level.toFixed(6) : '-'}</b></span>
-        <span>Hedef: <b>${r.target ? r.target.toFixed(6) : '-'}</b></span>
-        <span>Stop Loss: <b>${r.stop_loss ? r.stop_loss.toFixed(6) : '-'}</b></span>
-        <span>Fake Breakout Riski: <b>${r.fake_breakout_risk || '-'}</b></span>
-      </div>
-    </td></tr>`;
-}
-
 function renderCoinSearchResults(data) {
   const wrap = document.getElementById('csResultWrap');
   const qualified = data.qualified || [];
@@ -745,12 +990,7 @@ function renderCoinSearchResults(data) {
   if (qualified.length === 0) {
     html += `<div class="empty-state">${data.symbol} için şu an 60 puan üzerinde aktif bir sinyal yok — bu yüzden ana taramada çıkmadı.</div>`;
   } else {
-    html += `<table><thead><tr>
-      <th>TF</th><th>Formasyon</th><th>Yön</th><th>Skor</th><th>Başarı %</th>
-      <th>Breakout</th><th>Hacim</th><th>Güven</th>
-    </tr></thead><tbody>`;
-    qualified.forEach((r, i) => { html += _csRow(r, i, 'csq'); });
-    html += '</tbody></table>';
+    html += renderSignalTable(qualified.map(normalizeScanRow), 'csq');
   }
 
   html += `<h3 style="margin:24px 0 8px;">⚠️ Eşiği Geçemeyen Formasyonlar (Skor &lt; 60)</h3>`;
@@ -758,12 +998,7 @@ function renderCoinSearchResults(data) {
     html += `<div class="empty-state">Eşiği geçemeyen bir formasyon da bulunamadı.</div>`;
   } else {
     html += `<p style="color:var(--muted); font-size:12px;">Bu formasyonlar geometrik olarak tespit edildi ama kalite eşiğini geçemediği için ana taramada gösterilmiyor.</p>`;
-    html += `<table><thead><tr>
-      <th>TF</th><th>Formasyon</th><th>Yön</th><th>Skor</th><th>Başarı %</th>
-      <th>Breakout</th><th>Hacim</th><th>Güven</th>
-    </tr></thead><tbody>`;
-    below.forEach((r, i) => { html += _csRow(r, i, 'csb'); });
-    html += '</tbody></table>';
+    html += renderSignalTable(below.map(normalizeScanRow), 'csb');
   }
 
   wrap.innerHTML = html;
@@ -797,37 +1032,7 @@ function renderJournal(data) {
     return;
   }
 
-  let html = `<table><thead><tr>
-    <th>Tarih</th><th>Coin</th><th>TF</th><th>Formasyon</th><th>Yön</th>
-    <th>Skor</th><th>Başarı %</th><th>Güven</th>
-    <th>Giriş Fiyatı</th><th>Hedef</th><th>Stop</th><th>Güncel Fiyat</th><th>Durum</th>
-  </tr></thead><tbody>`;
-  signals.forEach(sig => {
-    const dirBadge = sig.direction === 'LONG' ? 'long' : 'short';
-    let statusColor = 'var(--muted)', statusText = sig.status;
-    if (sig.status === 'HEDEF') { statusColor = 'var(--green)'; statusText = '✓ Hedef Vurdu'; }
-    else if (sig.status === 'STOP') { statusColor = 'var(--red)'; statusText = '✗ Stop Vurdu'; }
-    else { statusText = '⏳ Açık'; }
-    const dateStr = (sig.created_at || '').replace('T', ' ').slice(0, 16);
-    const confBadge = sig.label === 'Çok Güçlü' ? 'verystrong' : sig.label === 'Güçlü' ? 'strong' : 'medium';
-    html += `<tr>
-      <td style="color:var(--muted); font-size:12px;">${dateStr}</td>
-      <td><b>${sig.symbol}</b></td>
-      <td>${sig.timeframe.toUpperCase()}</td>
-      <td>${sig.pattern}</td>
-      <td><span class="badge ${dirBadge}">${sig.direction}</span></td>
-      <td>${sig.score ?? '-'}</td>
-      <td>${sig.success_probability != null ? sig.success_probability + '%' : '-'}</td>
-      <td>${sig.label ? `<span class="badge ${confBadge}">${sig.label}</span>` : '-'}</td>
-      <td>${sig.entry_price}</td>
-      <td>${sig.target}</td>
-      <td>${sig.stop_loss}</td>
-      <td>${sig.last_price ?? '-'}</td>
-      <td style="color:${statusColor}; font-weight:700;">${statusText}</td>
-    </tr>`;
-  });
-  html += '</tbody></table>';
-  wrap.innerHTML = html;
+  wrap.innerHTML = renderSignalTable(signals.map(normalizeJournalRow), 'journal');
 }
 
 function refreshJournal() {

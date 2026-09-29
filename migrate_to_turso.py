@@ -23,6 +23,7 @@ COLUMNS = [
     "created_at", "symbol", "timeframe", "pattern", "direction", "entry_price",
     "target", "stop_loss", "score", "success_probability", "label", "status",
     "closed_at", "close_price", "last_checked_at", "last_price", "source",
+    "market_score", "cm_score", "hist_rate", "hist_n", "rr", "confidence_json",
 ]
 BATCH_SIZE = 50
 

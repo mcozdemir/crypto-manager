@@ -36,6 +36,17 @@ PENDING_PATH = os.path.join(PROJECT_DIR, "pending_signals.jsonl")
 
 _initialized = False
 
+# Sonradan eklenen sütunlar (eski tablolara migration ile eklenir)
+NEW_COLUMNS = [
+    ("source", "TEXT"),
+    ("market_score", "REAL"),       # Piyasa yönü (şimdi) uyum puanı, 0-100
+    ("cm_score", "REAL"),           # Crypto Manager uyum puanı, 0-100
+    ("hist_rate", "REAL"),          # Kayıt anındaki geçmiş başarı oranı (%)
+    ("hist_n", "INTEGER"),          # Geçmiş başarı örnek sayısı
+    ("rr", "REAL"),                 # Risk/ödül oranı
+    ("confidence_json", "TEXT"),    # Tüm güven endeksi ayrıntıları (JSON)
+]
+
 
 def init_db(force: bool = False):
     """Tabloyu (yoksa) oluşturur; eski veritabanlarını göçürür (migration)."""
@@ -62,7 +73,13 @@ def init_db(force: bool = False):
             close_price REAL,
             last_checked_at TEXT,
             last_price REAL,
-            source TEXT
+            source TEXT,
+            market_score REAL,
+            cm_score REAL,
+            hist_rate REAL,
+            hist_n INTEGER,
+            rr REAL,
+            confidence_json TEXT
         )
     """)
     # Göç (migration): sonradan eklenen sütunlar, eski tablolarda yoksa eklenir.
@@ -70,8 +87,9 @@ def init_db(force: bool = False):
     statements = []
     if "label" not in existing_cols:
         statements.append(("ALTER TABLE signals ADD COLUMN label TEXT", ()))
-    if "source" not in existing_cols:
-        statements.append(("ALTER TABLE signals ADD COLUMN source TEXT", ()))
+    for col, typ in NEW_COLUMNS:
+        if col not in existing_cols:
+            statements.append((f"ALTER TABLE signals ADD COLUMN {col} {typ}", ()))
     statements += [
         ("""CREATE INDEX IF NOT EXISTS idx_signals_lookup
             ON signals (symbol, timeframe, pattern, direction, status)""", ()),
@@ -89,9 +107,11 @@ INSERT_SQL = """
     INSERT OR IGNORE INTO signals
         (created_at, symbol, timeframe, pattern, direction, entry_price,
          target, stop_loss, score, success_probability, label, status,
-         closed_at, close_price, last_checked_at, last_price, source)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         closed_at, close_price, last_checked_at, last_price, source,
+         market_score, cm_score, hist_rate, hist_n, rr, confidence_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
+INSERT_COLUMN_COUNT = 23
 
 
 def _py(value):
@@ -170,8 +190,12 @@ def record_signals(results: List[Dict]) -> int:
         r["last_price"], r["target"], r["stop_loss"], r.get("score"),
         r.get("success_probability"), r.get("label"), "AÇIK",
         None, None, now_iso, r["last_price"], SOURCE_NAME,
+        r.get("market_score"), r.get("cm_score"), r.get("hist_rate"), r.get("hist_n"),
+        r.get("rr"), json.dumps(r["confidence"], ensure_ascii=False, default=_py)
+        if r.get("confidence") else None,
     ]] for r in results or []]
-    pending = _load_pending()
+    # Eski sürümün bekleyen kayıtlarında yeni sütunlar yok: boş değerle tamamla
+    pending = [row + [None] * (INSERT_COLUMN_COUNT - len(row)) for row in _load_pending()]
     if not new_rows and not pending:
         return 0
 
@@ -277,7 +301,19 @@ def get_signals(limit: int = 500, symbol: Optional[str] = None,
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
     args.append(int(limit))
-    return get_db().execute(sql, args)
+    return [_with_confidence(r) for r in get_db().execute(sql, args)]
+
+
+def _with_confidence(row: Dict) -> Dict:
+    """confidence_json metnini arayüz için sözlüğe çevirir."""
+    raw = row.pop("confidence_json", None)
+    row["confidence"] = None
+    if raw:
+        try:
+            row["confidence"] = json.loads(raw)
+        except (TypeError, ValueError):
+            pass
+    return row
 
 
 def get_all_signals(limit: int = 500) -> List[Dict]:

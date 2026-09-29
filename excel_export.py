@@ -44,6 +44,11 @@ COLUMNS = [
     ("breakout_level", "Breakout Seviyesi", 16),
     ("target", "Hedef", 14),
     ("stop_loss", "Stop Loss", 14),
+    ("hist_rate", "Geçmiş Başarı %", 14),
+    ("hist_n", "Geçmiş Örnek Sayısı", 14),
+    ("market_score", "Piyasa Yönü (/100)", 16),
+    ("cm_score", "Crypto Manager (/100)", 18),
+    ("rr", "Risk/Ödül", 10),
 ]
 
 
@@ -131,6 +136,11 @@ JOURNAL_COLUMNS = [
     ("last_price", "Son Kontrol Fiyatı", 16),
     ("closed_at", "Kapanış Tarihi", 18),
     ("close_price", "Kapanış Fiyatı", 14),
+    ("hist_rate", "Geçmiş Başarı %", 14),
+    ("hist_n", "Geçmiş Örnek Sayısı", 14),
+    ("market_score", "Piyasa Yönü (/100)", 16),
+    ("cm_score", "Crypto Manager (/100)", 18),
+    ("rr", "Risk/Ödül", 10),
 ]
 
 STATUS_FILLS = {

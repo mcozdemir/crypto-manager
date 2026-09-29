@@ -13,6 +13,7 @@ Tüm sürecin orkestrasyonu:
 """
 
 import logging
+from datetime import datetime
 from typing import List, Dict, Callable, Optional
 
 from utils import get_top_usdt_symbols, get_klines, safe_request_sleep
@@ -21,6 +22,7 @@ from patterns import detect_all_patterns
 from scoring import score_pattern
 from charts import plot_pattern
 from ayarlar import DEFAULT_TOP_N, TIMEFRAMES, MIN_SCORE, KLINE_LIMIT
+import confidence
 
 logging.basicConfig(
     level=logging.INFO,
@@ -56,7 +58,11 @@ def run_scan(top_n: int = DEFAULT_TOP_N, timeframes: Optional[List[str]] = None,
     total_tasks = len(symbols) * len(timeframes)
     task_idx = 0
 
+    features_by_symbol: Dict[str, Dict] = {}
+
     for symbol in symbols:
+        symbol_dfs: Dict = {}
+        results_before = len(results)
         for tf in timeframes:
             task_idx += 1
             _progress("scanning", task_idx, total_tasks, f"{symbol} ({tf}) analiz ediliyor...")
@@ -66,6 +72,7 @@ def run_scan(top_n: int = DEFAULT_TOP_N, timeframes: Optional[List[str]] = None,
                 if len(df) < 60:
                     continue
                 df = add_indicators(df)
+                symbol_dfs[tf] = df
 
                 found_patterns = detect_all_patterns(df)
                 candidates = []
@@ -114,10 +121,25 @@ def run_scan(top_n: int = DEFAULT_TOP_N, timeframes: Optional[List[str]] = None,
                         "last_price": float(df["close"].iloc[-1]),
                         "chart_path": chart_path,
                         "score_breakdown": score_info["scores"],
+                        "detected_at": datetime.now().isoformat(timespec="seconds"),
                     })
             except Exception as exc:  # noqa: BLE001
                 logger.warning("Hata (%s / %s): %s", symbol, tf, exc)
                 continue
+        # Güven endeksleri için coinin tüm zaman dilimlerindeki trend özeti
+        # (yalnızca sinyal çıkan coinler için; bellek ve istek tasarrufu)
+        if len(results) > results_before:
+            features_by_symbol[symbol] = confidence.ensure_daily(
+                symbol, confidence.symbol_features(symbol_dfs))
+
+    if results:
+        _progress("confidence", total_tasks, total_tasks,
+                  "Güven endeksleri hesaplanıyor (piyasa yönü, türev piyasa, likidite)...")
+        try:
+            ctx = confidence.ScanContext(timeframes)
+            confidence.enrich(results, ctx, features_by_symbol)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Güven endeksleri hesaplanamadı: %s", exc)
 
     results.sort(key=lambda r: r["success_probability"], reverse=True)
     _progress("done", total_tasks, total_tasks, f"Tarama tamamlandı. {len(results)} formasyon bulundu.")
@@ -165,6 +187,7 @@ def scan_single_symbol(symbol: str, timeframes: Optional[List[str]] = None,
     qualified: List[Dict] = []
     below_threshold: List[Dict] = []
     total_tasks = len(timeframes)
+    symbol_dfs: Dict = {}
 
     for task_idx, tf in enumerate(timeframes, start=1):
         _progress(task_idx - 1, total_tasks, f"{symbol} ({tf}) analiz ediliyor...")
@@ -173,6 +196,7 @@ def scan_single_symbol(symbol: str, timeframes: Optional[List[str]] = None,
         if len(df) < 60:
             continue
         df = add_indicators(df)
+        symbol_dfs[tf] = df
 
         found_patterns = detect_all_patterns(df)
         tf_qualified = []
@@ -203,6 +227,7 @@ def scan_single_symbol(symbol: str, timeframes: Optional[List[str]] = None,
                 "last_price": float(df["close"].iloc[-1]),
                 "chart_path": chart_path,
                 "score_breakdown": score_info["scores"],
+                "detected_at": datetime.now().isoformat(timespec="seconds"),
             }
             if score_info["total_score"] >= MIN_SCORE:
                 tf_qualified.append(row)
@@ -222,6 +247,14 @@ def scan_single_symbol(symbol: str, timeframes: Optional[List[str]] = None,
             tf_qualified = [r for r in tf_qualified if r["direction"] == best_direction]
 
         qualified.extend(tf_qualified)
+
+    if qualified or below_threshold:
+        try:
+            ctx = confidence.ScanContext(timeframes)
+            feats = confidence.ensure_daily(symbol, confidence.symbol_features(symbol_dfs))
+            confidence.enrich(qualified + below_threshold, ctx, {symbol: feats})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Güven endeksleri hesaplanamadı: %s", exc)
 
     qualified.sort(key=lambda r: r["success_probability"], reverse=True)
     below_threshold.sort(key=lambda r: r["score"], reverse=True)

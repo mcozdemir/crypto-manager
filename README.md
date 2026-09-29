@@ -80,6 +80,29 @@ Notlar:
 - Kendi domaininizi sonradan Render panelinde **Settings → Custom Domains**
   bölümünden bağlayabilirsiniz.
 
+## Güven endeksleri
+
+Tarama, Coin Ara ve Sinyal Günlüğü tabloları aynı kolonları gösterir; her
+kolon başlığındaki (i) ikonunun üzerine gelince açıklaması görünür.
+**Tüm puanlar sinyalin yönüne göredir (0-100):** yüksek puan, verinin bu
+LONG veya SHORT sinyalini desteklediği anlamına gelir. Aynı piyasa verisi
+LONG için düşük, SHORT için yüksek puan üretebilir.
+
+| Kolon | Ne gösterir |
+|---|---|
+| Formasyon | Formasyon skoru (/100) + **geçmiş başarı**: aynı formasyon/zaman dilimi/yöndeki sonuçlanmış sinyallerin hedef oranı (en az 10 örnek; yoksa "veri az") |
+| Piyasa Yönü | Şimdi: TOTAL/TOTAL2 24s değişimi + BTC günlük trendi (/100). 1 haftalık tahmin: yakında |
+| Temel Analiz | Yakında (CoinGecko: whitepaper, geliştirme, token ekonomisi, kilit açılımları) |
+| Crypto Manager | Zaman dilimi uyumu + BTC'ye karşı göreli güç + likidite + türev piyasa (fonlama, açık pozisyon, long/short) — ağırlıklar zaman dilimine göre değişir |
+| Risk/Ödül | Hedef mesafesi / stop mesafesi |
+
+Satıra tıklayınca grafik ve tüm puanların alt kırılımı açılır. Puanlar
+sinyal günlüğüne de kaydedilir (`market_score`, `cm_score`, `hist_rate`,
+`rr`, `confidence_json` sütunları); böylece ileride hangi endeksin tutan
+sinyalleri gerçekten öngördüğü ölçülüp ağırlıklar ayarlanabilir. Hesaplama
+`confidence.py` dosyasındadır. Vadeli işlem verisine ulaşılamazsa veya
+coinin vadeli piyasası yoksa o bileşen hesaba katılmaz.
+
 ## Kullanım
 
 ### 1) Terminal (CLI) modu
@@ -225,6 +248,7 @@ girerek üçünü paralel kullanabilirsiniz.
 | `charts.py` | mplfinance ile mum + trend + breakout + hedef/stop grafiği |
 | `scanner.py` | Tüm süreci orkestre eden tarama motoru |
 | `backtest.py` | Geçmiş veride walk-forward formasyon başarı oranı testi |
+| `confidence.py` | Güven endeksleri: geçmiş başarı, piyasa yönü, Crypto Manager, risk/ödül |
 | `journal.py` | Sinyalleri veritabanına kaydeden ve sonucunu takip eden günlük modülü |
 | `db.py` | Veritabanı katmanı: Turso (bulut) veya yerel SQLite, `.env` okuma |
 | `auth.py` | Giriş sistemi: kullanıcı adı + Authenticator (TOTP) kodu, oturum yönetimi |
