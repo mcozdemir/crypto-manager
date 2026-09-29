@@ -204,6 +204,12 @@
     <input type="number" id="topN" value="50" min="5" max="100" style="width:70px;">
     <button id="scanBtn" onclick="startScan()">Taramayı Başlat</button>
     <button id="exportBtn" onclick="exportExcel()" disabled>⬇ Excel'e İndir</button>
+    {% if current_user %}
+    <span style="margin-left:14px; font-size:13px; color:var(--muted);">👤 {{ current_user }}</span>
+    <form method="post" action="/logout" style="display:inline; margin:0;">
+      <button type="submit" style="background:var(--panel-2); border:1px solid var(--border);">Çıkış</button>
+    </form>
+    {% endif %}
   </div>
 </header>
 
@@ -341,6 +347,17 @@
 </main>
 
 <script>
+// Oturum süresi dolduysa (401) giriş sayfasına yönlendir
+(function () {
+  const _fetch = window.fetch;
+  window.fetch = function () {
+    return _fetch.apply(this, arguments).then(function (resp) {
+      if (resp.status === 401) { window.location.href = '/login'; }
+      return resp;
+    });
+  };
+})();
+
 let currentTab = 'all';
 let lastData = { results: [], top_long: [], top_short: [] };
 let polling = null;

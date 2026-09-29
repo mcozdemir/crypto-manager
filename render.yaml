@@ -1,0 +1,28 @@
+# Render "Blueprint" tanımı: Render panelinde New > Blueprint ile bu repo
+# seçildiğinde web servisi aşağıdaki ayarlarla otomatik oluşturulur.
+services:
+  - type: web
+    name: crypto-manager
+    runtime: python
+    plan: free
+    region: frankfurt          # Binance ABD IP'lerini engellediği için Avrupa
+    branch: main
+    autoDeployTrigger: commit  # main'e her push'ta otomatik yeniden yayın
+    buildCommand: pip install -r requirements.txt
+    # Tek işlem (worker): tarama durumu bellekte tutulduğu için birden fazla
+    # worker kullanılmamalı. Eşzamanlı istekler thread'lerle karşılanır.
+    startCommand: gunicorn app:app --workers 1 --threads 8 --timeout 180 --bind 0.0.0.0:$PORT
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+      - key: APP_NAME
+        value: crypto-manager
+      - key: MPLCONFIGDIR
+        value: /tmp/matplotlib
+      - key: APP_SECRET_KEY        # oturum çerezlerini imzalar; Render otomatik üretir
+        generateValue: true
+      - key: APP_TURSO_TECH_DB_URL # Render panelinde sizden istenir
+        sync: false
+      - key: APP_TURSO_TECH_TOKEN  # Render panelinde sizden istenir
+        sync: false

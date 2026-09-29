@@ -40,6 +40,46 @@ APP_TURSO_TECH_TOKEN=<turso erişim anahtarı>
 - Uygulama açılırken terminalde hangi veritabanının kullanıldığı yazar
   (`Sinyal günlüğü: Turso bulut veritabanı (...)`).
 
+## Giriş (kullanıcı adı + Authenticator kodu)
+
+Panel giriş gerektirir: kullanıcı adı + telefondaki Authenticator
+uygulamasının (Google / Microsoft Authenticator, 1Password vb.) ürettiği
+6 haneli kod. SMS / e-posta servisi kullanılmaz, ücretsizdir. Kullanıcılar
+Turso veritabanında tutulur; dışarıdan kayıt yoktur.
+
+```bash
+.venv/bin/python manage_users.py add mehmet      # kullanıcı ekler, terminalde QR kod gösterir
+.venv/bin/python manage_users.py list
+.venv/bin/python manage_users.py reset mehmet    # telefon değişti: yeni QR
+.venv/bin/python manage_users.py disable mehmet  # girişi kapat (enable ile açılır)
+.venv/bin/python manage_users.py delete mehmet
+```
+
+- QR kodu Authenticator uygulamasıyla okutun; kayıt "Crypto Manager" adıyla görünür.
+- Oturum 12 saat açık kalır. 5 hatalı denemeden sonra o kullanıcı 15 dakika engellenir.
+- Aynı kod iki kez kullanılamaz; telefon saati otomatik ayarlı olmalıdır.
+- `.env` içine `APP_SECRET_KEY=<uzun rastgele değer>` eklerseniz yerelde de
+  uygulama yeniden başlayınca oturum kapanmaz (isteğe bağlı).
+
+## Yayına alma (Render, Frankfurt)
+
+Repo kökündeki `render.yaml` ücretsiz bir Render web servisi tanımlar
+(Frankfurt bölgesi — Binance ABD IP'lerini engellediği için Avrupa seçildi).
+
+1. https://render.com adresinde GitHub hesabınızla oturum açın.
+2. **New → Blueprint** → `mcozdemir/crypto-manager` reposunu seçin.
+3. İstenen `APP_TURSO_TECH_DB_URL` ve `APP_TURSO_TECH_TOKEN` değerlerini
+   `.env` dosyanızdaki gibi girin → **Apply**.
+4. Birkaç dakika sonra site `https://crypto-manager-xxxx.onrender.com`
+   gibi bir adreste açılır. `main` dalına her push otomatik yeniden yayınlanır.
+
+Notlar:
+- Ücretsiz planda servis 15 dakika kullanılmazsa uyur; ilk açılış ~1 dakika sürer.
+- Grafik dosyaları (charts/) sunucu yeniden başlayınca silinir; sinyaller
+  ve kullanıcılar Turso'da olduğu için kaybolmaz.
+- Kendi domaininizi sonradan Render panelinde **Settings → Custom Domains**
+  bölümünden bağlayabilirsiniz.
+
 ## Kullanım
 
 ### 1) Terminal (CLI) modu
@@ -187,6 +227,9 @@ girerek üçünü paralel kullanabilirsiniz.
 | `backtest.py` | Geçmiş veride walk-forward formasyon başarı oranı testi |
 | `journal.py` | Sinyalleri veritabanına kaydeden ve sonucunu takip eden günlük modülü |
 | `db.py` | Veritabanı katmanı: Turso (bulut) veya yerel SQLite, `.env` okuma |
+| `auth.py` | Giriş sistemi: kullanıcı adı + Authenticator (TOTP) kodu, oturum yönetimi |
+| `manage_users.py` | Kullanıcı ekleme / listeleme / sıfırlama komutları |
+| `render.yaml` | Render'da yayına alma ayarları |
 | `migrate_to_turso.py` | Yerel `signal_journal.db` geçmişini Turso'ya aktaran tek seferlik betik |
 | `market_direction.py` | BTC/TOTAL/TOTAL2/BTC.D'yi birlikte değerlendirip piyasa rejimini belirleyen modül |
 | `excel_export.py` | Tarama sonuçlarını biçimlendirilmiş .xlsx'e aktarma |

@@ -27,18 +27,20 @@ from scanner import run_scan, scan_single_symbol, top_opportunities, TIMEFRAMES
 from excel_export import build_excel, export_filename, build_journal_excel, journal_export_filename
 import journal
 from db import get_db
+import auth
 from backtest import run_backtest
 from utils import get_latest_prices
 from market_direction import compute_market_snapshot
 from ayarlar import WEB_HOST, WEB_PORT, DEBUG_MODE, DEFAULT_TOP_N
 
 app = Flask(__name__)
+auth.init_app(app)  # kullanıcı adı + Authenticator kodu ile giriş (auth.py)
 
 # Klasör adından otomatik versiyon etiketi (ör. "crypto_pattern_scannerv2" -> "v2").
 # Böylece aynı anda birden fazla klasör/versiyon çalıştırıldığında panelde ve
 # indirilen dosya adlarında hangisinin hangisi olduğu karışmaz.
 _FOLDER_NAME = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
-APP_VERSION = _FOLDER_NAME if _FOLDER_NAME else "crypto_pattern_scanner"
+APP_VERSION = os.environ.get("APP_NAME") or _FOLDER_NAME or "crypto_pattern_scanner"
 
 CHARTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "charts")
 os.makedirs(CHARTS_DIR, exist_ok=True)
