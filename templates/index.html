@@ -227,6 +227,8 @@
   .dblock p { margin: 4px 0; font-size: 12px; }
   .dblock .sub { font-size: 12px; margin-top: 4px; }
   table.mini { font-size: 12px; }
+  .dblock .links a { color: var(--blue); text-decoration: none; }
+  .dblock .links a:hover { text-decoration: underline; }
   table.mini td { padding: 5px 4px; border-bottom: 1px solid var(--border); }
   table.mini tr:last-child td { border-bottom: 0; }
   table.mini td.num { text-align: right; white-space: nowrap; }
@@ -416,7 +418,7 @@ const COLUMN_INFO = {
   dir: 'LONG: fiyatın yükselmesi beklenir (alış pozisyonu). SHORT: fiyatın düşmesi beklenir (açığa satış). Tablodaki tüm puanlar bu yöne göre hesaplanır; aynı piyasa verisi LONG için düşük, SHORT için yüksek puan üretebilir.',
   pattern: 'Tespit edilen grafik formasyonu ve 100 üzerinden kalite skoru (geometri, hacim, kırılım, trend, volatilite, momentum). "Geçmiş" yüzdesi: aynı formasyon + zaman dilimi + yöndeki geçmiş sinyallerin kaçının stop\'tan önce hedefe ulaştığı. Parantezdeki sayı sonuçlanmış sinyal adedidir; 10\'dan azsa "veri az" yazar.',
   market: 'Genel kripto piyasasının bu sinyalin yönünü ne kadar desteklediği (100 üzerinden). Şimdi: TOTAL ve TOTAL2 (BTC hariç piyasa) 24 saatlik değişimi + BTC günlük trendi. Düşen piyasa SHORT için yüksek, LONG için düşük puan verir. 1 haftalık tahmin yakında eklenecek.',
-  fundamental: 'Coinin temel verileri: whitepaper, geliştirme aktivitesi, token ekonomisi (dolaşımdaki arz, FDV), kilit açılımları, protokol geliri. Yakında eklenecek.',
+  fundamental: 'Kriptonun "bilançosu" (100 üzerinden, sinyal yönüne göre): şeffaflık (whitepaper, GitHub, web sitesi), geliştirme aktivitesi (son kod güncellemesi), token ekonomisi (dolaşımdaki arz oranı, FDV / piyasa değeri — yüksekse ileride satış baskısı), olgunluk (piyasa değeri sırası, proje yaşı) ve varsa DeFi metrikleri (kilitli varlık trendi, ücret geliri). Sağlam temel LONG\'u, zayıf temel (yüksek dilüsyon, terk edilmiş proje) SHORT\'u destekler. Veriler 24 saatte bir güncellenir. Ayrıntılar için satıra tıklayın.',
   cm: 'Crypto Manager puanı (100 üzerinden), 4 bileşenin ağırlıklı birleşimi: zaman dilimi uyumu (1H/4H/1D trendleri sinyal yönünde mi), BTC\'ye karşı göreli güç, likidite (hacim ve alış-satış farkı) ve türev piyasa (fonlama oranı, açık pozisyon, long/short oranı). Ağırlıklar zaman dilimine göre değişir. Ayrıntılar için satıra tıklayın.',
   entry: 'Sinyalin tespit edildiği andaki fiyat.',
   current: 'Son bilinen fiyat ve girişe göre değişimi. Yeşil = sinyal yönünde (LONG\'da yükseliş, SHORT\'ta düşüş), kırmızı = ters yönde. Günlükte "Fiyatları Güncelle" ile yenilenir.',
@@ -495,11 +497,17 @@ function normalizeScanRow(r) {
     pattern: r.pattern, score: r.score, label: r.label, success_probability: r.success_probability,
     conf: c, hist_rate: r.hist_rate, hist_n: r.hist_n,
     entry: r.last_price, current: r.last_price, target: r.target, stop: r.stop_loss,
-    rr: c.rr, target_pct: c.target_pct, stop_pct: c.stop_pct,
+    rr: c.rr, target_pct: c.target_pct, stop_pct: c.stop_pct, fundamental_score: r.fundamental_score,
     status: 'YENİ', chart_path: r.chart_path, breakdown: r.score_breakdown,
     breakout: r.breakout, volume_desc: r.volume_desc, fake_breakout_risk: r.fake_breakout_risk,
     breakout_level: r.breakout_level,
   };
+}
+
+function rrFrom(entry, target, stop) {
+  if (!entry || target == null || stop == null) return null;
+  const risk = Math.abs(entry - stop);
+  return risk > 0 ? Math.abs(target - entry) / risk : null;
 }
 
 function normalizeJournalRow(s) {
@@ -511,10 +519,24 @@ function normalizeJournalRow(s) {
     conf: c, hist_rate: s.hist_rate, hist_n: s.hist_n,
     entry: s.entry_price, current: s.status === 'AÇIK' ? s.last_price : (s.close_price ?? s.last_price),
     target: s.target, stop: s.stop_loss,
-    rr: s.rr ?? c.rr, target_pct: c.target_pct ?? pct(s.target, s.entry_price),
+    fundamental_score: s.fundamental_score, market_score: s.market_score, cm_score: s.cm_score,
+    rr: s.rr ?? c.rr ?? rrFrom(s.entry_price, s.target, s.stop_loss),
+    target_pct: c.target_pct ?? pct(s.target, s.entry_price),
     stop_pct: c.stop_pct ?? pct(s.stop_loss, s.entry_price),
     status: s.status, closed_at: s.closed_at, source: s.source,
   };
+}
+
+const LINK_NAMES = { coingecko: 'CoinGecko', whitepaper: 'Whitepaper', github: 'GitHub', homepage: 'Web sitesi' };
+
+function fundamentalCell(f, fallback) {
+  const sc = f ? f.score : fallback;
+  if (!f && (fallback === null || fallback === undefined)) return '<span class="sc sc-na">–</span>';
+  let sub = '';
+  if (f && f.score === null) sub = `<div class="sub muted">${f.note || 'veri yok'}</div>`;
+  else if (f && f.partial) sub = '<div class="sub muted">kısmi veri</div>';
+  else if (f && f.categories && f.categories.length) sub = `<div class="sub muted">${f.categories[0]}</div>`;
+  return scoreCell(sc) + sub;
 }
 
 function statusCell(st) {
@@ -554,7 +576,7 @@ function renderSignalTable(rows, group, opts = {}) {
         <div class="sub">${historyText(c.history, r.hist_rate, r.hist_n)}</div></td>
       <td class="col-market"><div><span class="muted">Şimdi</span> ${scoreCell(marketScore, market.regime)}</div>
         <div class="sub muted">1 hafta: yakında</div></td>
-      <td class="col-fundamental"><span class="muted">yakında</span></td>
+      <td class="col-fundamental">${fundamentalCell(c.fundamental, r.fundamental_score)}</td>
       <td class="col-cm">${scoreCell(cmScore)}</td>
       <td class="col-entry">${fmtPrice(r.entry)}</td>
       <td class="col-current">${fmtPrice(r.current)}<div class="sub ${curCls}">${curPct === null || Math.abs(curPct) < 0.05 ? '' : fmtPct(curPct)}</div></td>
@@ -601,6 +623,29 @@ function detailHtml(r) {
   if (market.regime) html += `<p><b>${market.regime}</b></p>`;
   (market.notes || []).forEach(n => { html += `<div class="sub muted">• ${n}</div>`; });
   if (!market.notes) html += '<p class="muted">Veri yok.</p>';
+  html += '</div>';
+
+  // Temel analiz
+  const f = c.fundamental;
+  html += `<div class="dblock"><h4>Temel Analiz${f && f.name ? ' · ' + f.name : ''} ${scoreCell(f ? f.score : r.fundamental_score)}</h4>`;
+  if (f && f.components && f.components.length) {
+    html += '<table class="mini"><tbody>';
+    f.components.forEach(comp => {
+      html += `<tr><td>${comp.name}<div class="sub muted">${comp.note || ''}</div></td>
+        <td class="num">${scoreCell(comp.score)}<div class="sub muted">${comp.verdict} · ağırlık %${Math.round(comp.weight * 100)}</div></td></tr>`;
+    });
+    html += '</tbody></table>';
+    if (f.quality !== null && f.quality !== undefined) {
+      html += `<div class="sub">Proje sağlamlığı (yönden bağımsız): <b>${f.quality}/100</b></div>`;
+    }
+    if (f.categories && f.categories.length) html += `<div class="sub muted">Kategori: ${f.categories.join(', ')}</div>`;
+    const links = Object.entries(f.links || {}).filter(([, u]) => u)
+      .map(([k, u]) => `<a href="${escapeAttr(u)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${LINK_NAMES[k] || k}</a>`);
+    if (links.length) html += `<div class="sub links">${links.join(' · ')}</div>`;
+    if (f.partial) html += '<div class="sub muted">Whitepaper / GitHub / DeFi ayrıntıları sonraki taramada tamamlanacak.</div>';
+  } else {
+    html += `<p class="muted">${f ? (f.note || 'Veri yok.') : 'Bu kayıt temel analiz eklenmeden önce oluşturulmuş.'}</p>`;
+  }
   html += '</div>';
 
   // Formasyon

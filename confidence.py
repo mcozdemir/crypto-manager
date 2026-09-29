@@ -19,6 +19,8 @@ Endeksler:
   - Crypto Manager      : Zaman dilimi uyumu + göreli güç (BTC'ye karşı) +
                           likidite + türev piyasa (fonlama, açık pozisyon,
                           long/short oranı) birleşimi
+  - Temel Analiz        : fundamentals.py (şeffaflık, geliştirme, token
+                          ekonomisi, olgunluk, DeFi metrikleri)
   - Risk/Ödül           : Hedef mesafesi / stop mesafesi
 
 Veri alınamayan bileşen (ör. coinin vadeli işlem piyasası yoksa) hesaba
@@ -451,6 +453,12 @@ def ensure_daily(symbol: str, features: Dict) -> Dict:
 
 def enrich(results: List[Dict], ctx: ScanContext, features_by_symbol: Dict[str, Dict]) -> List[Dict]:
     """Her sonuca güven endekslerini ekler (yerinde günceller)."""
+    import fundamentals
+    fund_data: Dict[str, Dict] = {}
+    try:
+        fund_data = fundamentals.collect(sorted({r["symbol"] for r in results}))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Temel analiz verisi alınamadı: %s", exc)
     for r in results:
         try:
             feats = features_by_symbol.get(r["symbol"], {"trends": {}, "returns": {}})
@@ -459,8 +467,10 @@ def enrich(results: List[Dict], ctx: ScanContext, features_by_symbol: Dict[str, 
             cm = crypto_manager(ctx, r["symbol"], r["timeframe"], r["direction"],
                                 feats.get("trends", {}), feats.get("returns", {}))
             rr = risk_reward(r.get("last_price"), r.get("target"), r.get("stop_loss"))
+            fund = fundamentals.score(fund_data.get(fundamentals.base_asset(r["symbol"])), r["direction"])
             r["confidence"] = {"history": hist, "market": market, "cm": cm, **rr,
-                               "fundamental": None, "market_week": None}
+                               "fundamental": fund, "market_week": None}
+            r["fundamental_score"] = fund["score"]
             r["hist_rate"] = hist["rate"]
             r["hist_n"] = hist["n"]
             r["market_score"] = market["score"]

@@ -26,3 +26,5 @@ services:
         sync: false
       - key: APP_TURSO_TECH_TOKEN  # Render panelinde sizden istenir
         sync: false
+      - key: APP_COINGECKO_API_KEY # isteğe bağlı: ücretsiz CoinGecko "Demo" anahtarı
+        sync: false

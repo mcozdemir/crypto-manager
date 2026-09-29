@@ -134,7 +134,7 @@ def run_scan(top_n: int = DEFAULT_TOP_N, timeframes: Optional[List[str]] = None,
 
     if results:
         _progress("confidence", total_tasks, total_tasks,
-                  "Güven endeksleri hesaplanıyor (piyasa yönü, türev piyasa, likidite)...")
+                  "Güven endeksleri hesaplanıyor (piyasa yönü, temel analiz, türev piyasa, likidite)...")
         try:
             ctx = confidence.ScanContext(timeframes)
             confidence.enrich(results, ctx, features_by_symbol)

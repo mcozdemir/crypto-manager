@@ -41,6 +41,7 @@ NEW_COLUMNS = [
     ("source", "TEXT"),
     ("market_score", "REAL"),       # Piyasa yönü (şimdi) uyum puanı, 0-100
     ("cm_score", "REAL"),           # Crypto Manager uyum puanı, 0-100
+    ("fundamental_score", "REAL"),  # Temel analiz uyum puanı, 0-100
     ("hist_rate", "REAL"),          # Kayıt anındaki geçmiş başarı oranı (%)
     ("hist_n", "INTEGER"),          # Geçmiş başarı örnek sayısı
     ("rr", "REAL"),                 # Risk/ödül oranı
@@ -79,7 +80,8 @@ def init_db(force: bool = False):
             hist_rate REAL,
             hist_n INTEGER,
             rr REAL,
-            confidence_json TEXT
+            confidence_json TEXT,
+            fundamental_score REAL
         )
     """)
     # Göç (migration): sonradan eklenen sütunlar, eski tablolarda yoksa eklenir.
@@ -108,10 +110,10 @@ INSERT_SQL = """
         (created_at, symbol, timeframe, pattern, direction, entry_price,
          target, stop_loss, score, success_probability, label, status,
          closed_at, close_price, last_checked_at, last_price, source,
-         market_score, cm_score, hist_rate, hist_n, rr, confidence_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         market_score, cm_score, hist_rate, hist_n, rr, confidence_json, fundamental_score)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
-INSERT_COLUMN_COUNT = 23
+INSERT_COLUMN_COUNT = 24
 
 
 def _py(value):
@@ -193,6 +195,7 @@ def record_signals(results: List[Dict]) -> int:
         r.get("market_score"), r.get("cm_score"), r.get("hist_rate"), r.get("hist_n"),
         r.get("rr"), json.dumps(r["confidence"], ensure_ascii=False, default=_py)
         if r.get("confidence") else None,
+        r.get("fundamental_score"),
     ]] for r in results or []]
     # Eski sürümün bekleyen kayıtlarında yeni sütunlar yok: boş değerle tamamla
     pending = [row + [None] * (INSERT_COLUMN_COUNT - len(row)) for row in _load_pending()]

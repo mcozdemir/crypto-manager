@@ -92,7 +92,7 @@ LONG için düşük, SHORT için yüksek puan üretebilir.
 |---|---|
 | Formasyon | Formasyon skoru (/100) + **geçmiş başarı**: aynı formasyon/zaman dilimi/yöndeki sonuçlanmış sinyallerin hedef oranı (en az 10 örnek; yoksa "veri az") |
 | Piyasa Yönü | Şimdi: TOTAL/TOTAL2 24s değişimi + BTC günlük trendi (/100). 1 haftalık tahmin: yakında |
-| Temel Analiz | Yakında (CoinGecko: whitepaper, geliştirme, token ekonomisi, kilit açılımları) |
+| Temel Analiz | Şeffaflık (whitepaper, GitHub, web sitesi) + geliştirme aktivitesi (son kod güncellemesi) + token ekonomisi (dolaşımdaki arz, FDV/piyasa değeri) + olgunluk (sıralama, yaş) + DeFi (TVL trendi, ücret geliri). Sağlam temel LONG'u, zayıf temel SHORT'u destekler |
 | Crypto Manager | Zaman dilimi uyumu + BTC'ye karşı göreli güç + likidite + türev piyasa (fonlama, açık pozisyon, long/short) — ağırlıklar zaman dilimine göre değişir |
 | Risk/Ödül | Hedef mesafesi / stop mesafesi |
 
@@ -102,6 +102,16 @@ sinyal günlüğüne de kaydedilir (`market_score`, `cm_score`, `hist_rate`,
 sinyalleri gerçekten öngördüğü ölçülüp ağırlıklar ayarlanabilir. Hesaplama
 `confidence.py` dosyasındadır. Vadeli işlem verisine ulaşılamazsa veya
 coinin vadeli piyasası yoksa o bileşen hesaba katılmaz.
+
+Temel analiz verileri (`fundamentals.py`) CoinGecko, GitHub ve DefiLlama'nın
+ücretsiz API'lerinden alınır ve Turso'daki `coin_fundamentals` tablosunda
+24 saat önbelleklenir. Ücretsiz limitleri aşmamak için her taramada en fazla
+12 coinin ayrıntısı (whitepaper, GitHub, DeFi) çekilir; kalanlar sonraki
+taramalarda tamamlanır ("kısmi veri"). Daha hızlı ve güvenilir veri için
+CoinGecko'dan ücretsiz bir **Demo API anahtarı** alıp `.env` dosyasına ve
+Render → Environment bölümüne `APP_COINGECKO_API_KEY` olarak ekleyin.
+Kilit açılımı (token unlock) takvimi için ücretsiz bir kaynak bulunmadığından
+henüz dahil edilmedi.
 
 ## Kullanım
 
@@ -248,6 +258,7 @@ girerek üçünü paralel kullanabilirsiniz.
 | `charts.py` | mplfinance ile mum + trend + breakout + hedef/stop grafiği |
 | `scanner.py` | Tüm süreci orkestre eden tarama motoru |
 | `backtest.py` | Geçmiş veride walk-forward formasyon başarı oranı testi |
+| `fundamentals.py` | Temel analiz: CoinGecko / GitHub / DefiLlama verisi ve puanlaması |
 | `confidence.py` | Güven endeksleri: geçmiş başarı, piyasa yönü, Crypto Manager, risk/ödül |
 | `journal.py` | Sinyalleri veritabanına kaydeden ve sonucunu takip eden günlük modülü |
 | `db.py` | Veritabanı katmanı: Turso (bulut) veya yerel SQLite, `.env` okuma |

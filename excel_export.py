@@ -47,6 +47,7 @@ COLUMNS = [
     ("hist_rate", "Geçmiş Başarı %", 14),
     ("hist_n", "Geçmiş Örnek Sayısı", 14),
     ("market_score", "Piyasa Yönü (/100)", 16),
+    ("fundamental_score", "Temel Analiz (/100)", 16),
     ("cm_score", "Crypto Manager (/100)", 18),
     ("rr", "Risk/Ödül", 10),
 ]
@@ -139,6 +140,7 @@ JOURNAL_COLUMNS = [
     ("hist_rate", "Geçmiş Başarı %", 14),
     ("hist_n", "Geçmiş Örnek Sayısı", 14),
     ("market_score", "Piyasa Yönü (/100)", 16),
+    ("fundamental_score", "Temel Analiz (/100)", 16),
     ("cm_score", "Crypto Manager (/100)", 18),
     ("rr", "Risk/Ödül", 10),
 ]
