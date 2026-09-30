@@ -1323,7 +1323,7 @@ function startQuote() {
 }
 
 function refreshQuote() {
-  if (!T.row || !T.form) return;
+  if (!T.row || !T.form || document.hidden) return;
   fetch(`/api/trade/quote?symbol=${encodeURIComponent(T.row.symbol)}&market=${T.form.market}`)
     .then(x => x.json()).then(q => {
       const el = document.getElementById('tPrice');

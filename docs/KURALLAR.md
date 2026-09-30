@@ -4,7 +4,7 @@
 > Sinyal tespiti, puanlama, eleme, kayıt veya tahmin mantığını değiştiren her
 > güncellemede bu belge de aynı commit içinde güncellenir (bkz. [§16](#16-değişiklik-ve-sürüm-kuralları)).
 >
-> Son güncelleme: **v1.4.0** · 2026-09-30 · Kodla karşılaştırma: `patterns.py`, `scoring.py`,
+> Son güncelleme: **v1.4.1** · 2026-09-30 · Kodla karşılaştırma: `patterns.py`, `scoring.py`,
 > `scanner.py`, `confidence.py`, `fundamentals.py`, `market_direction.py`, `journal.py`,
 > `backtest.py`, `auth.py`, `ayarlar.py`, `binance_client.py`, `trading.py`, `profiles.py`
 
@@ -383,6 +383,7 @@ açar. Durumu HEDEF/STOP olan (kapanmış) sinyallerde buton gösterilmez.
 
 | Sürüm | Tarih | Değişiklik |
 |---|---|---|
+| 1.4.1 | 2026-09-30 | Binance hız sınırı koruması (429/418'de bekleme, spot veride yedek adres) |
 | 1.4.0 | 2026-09-30 | Binance ile emir açma (Spot + Vadeli, Demo + Canlı), emir özeti, otomatik hedef/stop; profil sayfası |
 | 1.3.1 | 2026-09-30 | CoinGecko Demo anahtarı: piyasa yönü anahtarla; temel analiz ayrıntı bütçesi 12 → 40 |
 | 1.3.0 | 2026-09-29 | Sinyallere sürüm bilgisi; DeFi metrikleri yalnızca DeFi protokollerinde |
@@ -398,6 +399,13 @@ açar. Durumu HEDEF/STOP olan (kapanmış) sinyallerde buton gösterilmez.
   **sürüm karşılaştırması** ölçer.
 - Temel analiz kısa vadeli (1H) hareketlerde zayıf bir göstergedir.
 - Binance ABD IP'lerini engeller; sunucu Frankfurt'ta çalışır.
+- **Binance hız sınırı:** dakikalık istek ağırlığı aşılırsa Binance 429, ısrar edilirse 418
+  (IP yasağı, 2 dk – 3 gün) döner. Render'ın çıkış IP'si başka uygulamalarla paylaşıldığı
+  için başkalarının trafiği de bu sınırı tüketebilir. Uygulama 429/418 alınca o adrese
+  `Retry-After` süresince hiç istek göndermez; spot fiyat/mum verisi için
+  `data-api.binance.vision` yedeğine geçer. Vadeli verinin yedeği yoktur; o süre boyunca
+  vadeli bileşenleri "veri yok" olur. Tüm adresler engelliyse "yaklaşık N dk sonra tekrar
+  deneyin" mesajı gösterilir.
 - Ücretsiz API limitleri nedeniyle temel analiz ilk taramalarda "kısmi" olabilir.
 - Render'ın çıkış IP'leri sabit olmadığından Binance anahtarında IP kısıtlaması
   kullanılamaz; bu tür anahtarlar Binance tarafından **90 gün** sonra (ya da 30 gün

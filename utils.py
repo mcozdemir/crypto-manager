@@ -17,12 +17,13 @@ import time
 import logging
 from typing import List, Dict
 
-import requests
 import pandas as pd
+
+import binance_http
 
 logger = logging.getLogger("scanner.utils")
 
-BASE_URL = "https://api.binance.com"
+BASE_URL = binance_http.SPOT_HOSTS[0]
 
 # Analiz dışında bırakılacak stablecoin bazlı paritelerin taban varlıkları
 # BUG FİX: EURI (Eurite - Euro'ya sabit), RLUSD (Ripple USD), USD1 (World
@@ -42,24 +43,30 @@ INTERVAL_MAP = {
     "1d": "1d",
 }
 
-SESSION = requests.Session()
-SESSION.headers.update({"User-Agent": "crypto-pattern-scanner/1.0"})
+SESSION = binance_http.SESSION
 
 
 def _get(endpoint: str, params: dict = None, retries: int = 3, timeout: int = 10):
-    """Basit retry mekanizmalı GET isteği."""
-    url = f"{BASE_URL}{endpoint}"
+    """
+    Yedek adresli ve hız sınırına saygılı GET isteği (bkz. binance_http).
+    Yalnızca ağ hatalarında tekrar dener; 429/418'de ASLA tekrar denemez
+    (tekrar denemek Binance'in IP yasağını uzatır).
+    """
     last_exc = None
     for attempt in range(retries):
         try:
-            resp = SESSION.get(url, params=params, timeout=timeout)
-            resp.raise_for_status()
-            return resp.json()
+            return binance_http.get(binance_http.SPOT_HOSTS, endpoint, params=params, timeout=timeout)
+        except binance_http.BinanceUnavailable as exc:
+            if exc.retry_after:
+                raise RuntimeError(str(exc)) from exc
+            last_exc = exc
         except Exception as exc:  # noqa: BLE001
             last_exc = exc
-            logger.warning("İstek hatası (%s), tekrar deneniyor (%d/%d): %s",
-                            endpoint, attempt + 1, retries, exc)
-            time.sleep(1.5 * (attempt + 1))
+            if getattr(getattr(exc, "response", None), "status_code", 500) < 500:
+                break  # 400 vb. istemci hatası: tekrar denemek anlamsız
+        logger.warning("İstek hatası (%s), tekrar deneniyor (%d/%d): %s",
+                       endpoint, attempt + 1, retries, last_exc)
+        time.sleep(1.5 * (attempt + 1))
     raise RuntimeError(f"Binance API isteği başarısız oldu: {endpoint} -> {last_exc}")
 
 

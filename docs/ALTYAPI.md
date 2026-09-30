@@ -4,7 +4,7 @@
 > etkileyen her değişiklikte aynı commit içinde güncellenir. Ürün kuralları için:
 > [`KURALLAR.md`](KURALLAR.md).
 >
-> Son güncelleme: **v1.4.0** · 2026-09-30
+> Son güncelleme: **v1.4.1** · 2026-09-30
 
 ## 1. Genel bakış
 
@@ -45,6 +45,7 @@ flowchart LR
 | `manage_users.py` | Komut satırından kullanıcı ekleme/listeleme/sıfırlama/kapatma/silme (QR kod) |
 | `scanner.py` | Tarama boru hattı (pipeline) orkestrasyonu: tam tarama ve tek coin arama |
 | `utils.py` | Binance spot REST istemcisi (sembol listesi, mum, fiyat) |
+| `binance_http.py` | Binance'e giden tüm anahtarsız isteklerin ortak kapısı: 429/418/451'de `Retry-After` kadar soğuma, spot için yedek adres (`data-api.binance.vision`), ağırlık izleme |
 | `indicators.py` | RSI, MACD, EMA, ADX, ATR, OBV |
 | `patterns.py` | Pivot tespiti ve 10 formasyon dedektörü, geçerlilik kontrolleri |
 | `scoring.py` | Formasyon skoru (100 üzerinden) ve tahmini başarı olasılığı |
@@ -174,7 +175,7 @@ sequenceDiagram
 
 | Servis | Kullanım | Uç noktalar | Anahtar / limit |
 |---|---|---|---|
-| Binance Spot | Sembol listesi, mumlar, fiyatlar, 24s istatistik, emir defteri | `/api/v3/exchangeInfo`, `/klines`, `/ticker/24hr`, `/ticker/price`, `/ticker/bookTicker` | Anahtarsız. **ABD IP'lerini engeller (HTTP 451)** |
+| Binance Spot | Sembol listesi, mumlar, fiyatlar, 24s istatistik, emir defteri | `/api/v3/exchangeInfo`, `/klines`, `/ticker/24hr`, `/ticker/price`, `/ticker/bookTicker` | Anahtarsız; `api.binance.com`, engellenirse yedek `data-api.binance.vision`. Dakikalık ağırlık 6000; aşılırsa 429 → ısrarda 418 IP yasağı. **ABD IP'lerini engeller (HTTP 451)** |
 | Binance USDT-M Vadeli | Fonlama, açık pozisyon, long/short | `/fapi/v1/premiumIndex`, `/futures/data/openInterestHist`, `/futures/data/globalLongShortAccountRatio` | Anahtarsız. Erişilemezse bileşen devre dışı |
 | CoinGecko | Piyasa rejimi, coin temel verileri | `/global`, `/coins/markets`, `/coins/{id}`, `/search` | `APP_COINGECKO_API_KEY` (Demo, dakikada 100 istek). Anahtarsız kullanım paylaşılan IP'lerde 403/429 verir |
 | GitHub | Proje deposunun son güncellemesi | `/repos/{owner}/{repo}`, `/orgs/{org}/repos` | Anahtarsız saatte 60 istek; isteğe bağlı `APP_GITHUB_API_TOKEN` |

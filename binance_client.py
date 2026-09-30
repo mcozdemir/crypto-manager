@@ -37,6 +37,8 @@ from typing import Dict, List, Optional, Tuple
 
 import requests
 
+import binance_http
+
 logger = logging.getLogger("scanner.binance_client")
 
 URLS = {
@@ -110,8 +112,17 @@ _info_lock = threading.Lock()
 
 
 def _public_get(env: str, market: str, path: str, params: dict = None):
-    url = URLS[env][market] + path
-    resp = _SESSION.get(url, params=params, timeout=10)
+    """Anahtarsız istek. Canlı ortamda ortak kapıdan (soğuma + spot yedek adres) geçer."""
+    base = URLS[env][market]
+    if env == "live" and base in (binance_http.SPOT_HOSTS[0], binance_http.FUTURES_HOSTS[0]):
+        hosts = binance_http.SPOT_HOSTS if market == "spot" else binance_http.FUTURES_HOSTS
+        try:
+            return binance_http.get(hosts, path, params=params, timeout=10)
+        except binance_http.BinanceUnavailable as exc:
+            raise BinanceError(str(exc), exc.code) from exc
+        except requests.HTTPError as exc:
+            return _parse(exc.response)
+    resp = _SESSION.get(base + path, params=params, timeout=10)
     return _parse(resp)
 
 
@@ -126,6 +137,9 @@ def _parse(resp):
         code = (data or {}).get("code") if isinstance(data, dict) else None
         if resp.status_code == 451:
             msg = "Binance bu sunucu konumundan erişime izin vermiyor (HTTP 451)"
+        elif resp.status_code in (418, 429):
+            msg = ("Binance istek sınırı nedeniyle sunucuyu geçici olarak engelledi "
+                   f"(HTTP {resp.status_code}); birkaç dakika sonra tekrar deneyin")
         raise BinanceError(msg or f"HTTP {resp.status_code}", code, resp.status_code)
     return data
 

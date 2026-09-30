@@ -35,6 +35,8 @@ from typing import Dict, List, Optional
 import numpy as np
 import requests
 
+import binance_http
+
 logger = logging.getLogger("scanner.confidence")
 
 FAPI_URL = "https://fapi.binance.com"
@@ -88,9 +90,16 @@ def verdict(score: Optional[float]) -> str:
 
 
 def _get(url: str, params: dict = None, timeout: float = 8.0):
-    resp = _SESSION.get(url, params=params, timeout=timeout)
-    resp.raise_for_status()
-    return resp.json()
+    """Binance isteği: hız sınırı/yasak durumunda soğuma + spot için yedek adres."""
+    if url.startswith(SPOT_URL):
+        hosts, path = binance_http.SPOT_HOSTS, url[len(SPOT_URL):]
+    elif url.startswith(FAPI_URL):
+        hosts, path = binance_http.FUTURES_HOSTS, url[len(FAPI_URL):]
+    else:
+        resp = _SESSION.get(url, params=params, timeout=timeout)
+        resp.raise_for_status()
+        return resp.json()
+    return binance_http.get(hosts, path, params=params, timeout=timeout)
 
 
 def _pct(a: float, b: float) -> Optional[float]:
