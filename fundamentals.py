@@ -49,7 +49,8 @@ GH_URL = "https://api.github.com"
 LLAMA_URL = "https://api.llama.fi"
 
 CACHE_TTL_HOURS = 24
-DETAIL_BUDGET = 12          # tarama başına en fazla bu kadar coin için ayrıntı isteği
+DETAIL_BUDGET = 12          # anahtarsız: tarama başına en fazla bu kadar coin için ayrıntı isteği
+DETAIL_BUDGET_WITH_KEY = 40 # CoinGecko Demo anahtarıyla (dakikada 100 istek) daha yüksek bütçe
 MARKETS_PAGES = 4           # /coins/markets: 4 x 250 = ilk 1000 coin
 
 WEIGHTS = {
@@ -324,11 +325,13 @@ def _attach_defi(data: Dict):
                     "name": p["name"]}
 
 
-def collect(symbols: List[str], budget: int = DETAIL_BUDGET) -> Dict[str, Dict]:
+def collect(symbols: List[str], budget: Optional[int] = None) -> Dict[str, Dict]:
     """
     Verilen Binance sembolleri için temel verileri döndürür (baz varlık -> veri).
     Önbellekte taze olanlar doğrudan kullanılır.
     """
+    if budget is None:
+        budget = DETAIL_BUDGET_WITH_KEY if _cg_headers() else DETAIL_BUDGET
     bases = sorted({base_asset(s) for s in symbols})
     try:
         cache = _load_cache(bases)

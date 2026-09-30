@@ -4,6 +4,10 @@ Binance Spot'taki en yüksek hacimli ilk 50 USDT paritesini 1H / 4H / 1D
 zaman dilimlerinde tarayıp 10 klasik grafik formasyonunu (5 yükseliş,
 5 düşüş) tespit eden, puanlayan ve grafikleyen tam bir Python projesi.
 
+> 📘 **Belgeler:** Ürünün tüm kural seti → [`docs/KURALLAR.md`](docs/KURALLAR.md) ·
+> Teknik altyapı ve pipeline → [`docs/ALTYAPI.md`](docs/ALTYAPI.md) ·
+> Geliştirme kuralları → [`CLAUDE.md`](CLAUDE.md)
+
 ## Kurulum
 
 ```bash
@@ -106,7 +110,7 @@ coinin vadeli piyasası yoksa o bileşen hesaba katılmaz.
 Temel analiz verileri (`fundamentals.py`) CoinGecko, GitHub ve DefiLlama'nın
 ücretsiz API'lerinden alınır ve Turso'daki `coin_fundamentals` tablosunda
 24 saat önbelleklenir. Ücretsiz limitleri aşmamak için her taramada en fazla
-12 coinin ayrıntısı (whitepaper, GitHub, DeFi) çekilir; kalanlar sonraki
+12 coinin (CoinGecko Demo anahtarıyla 40) ayrıntısı (whitepaper, GitHub, DeFi) çekilir; kalanlar sonraki
 taramalarda tamamlanır ("kısmi veri"). Daha hızlı ve güvenilir veri için
 CoinGecko'dan ücretsiz bir **Demo API anahtarı** alıp `.env` dosyasına ve
 Render → Environment bölümüne `APP_COINGECKO_API_KEY` olarak ekleyin.

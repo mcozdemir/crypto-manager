@@ -26,6 +26,7 @@ BTC arzının 24 saat içinde ihmal edilebilir düzeyde değiştiği (fiyat
 değişimi ~ piyasa değeri değişimi) varsayımına dayanır.
 """
 
+import os
 import time
 import logging
 from typing import Dict, Tuple
@@ -56,7 +57,9 @@ def _fetch_coingecko_global(retries: int = 3, timeout: int = 10) -> Dict:
     last_exc = None
     for attempt in range(retries):
         try:
-            resp = _SESSION.get(COINGECKO_GLOBAL_URL, timeout=timeout)
+            key = os.environ.get("APP_COINGECKO_API_KEY", "").strip()
+            headers = {"x-cg-demo-api-key": key} if key else {}
+            resp = _SESSION.get(COINGECKO_GLOBAL_URL, timeout=timeout, headers=headers)
             resp.raise_for_status()
             return resp.json()["data"]
         except Exception as exc:  # noqa: BLE001

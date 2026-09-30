@@ -17,10 +17,12 @@ import os
 import subprocess
 from functools import lru_cache
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
 # (sürüm, tarih, açıklama) — en yeni en üstte
 CHANGELOG = [
+    ("1.3.1", "2026-09-30", "CoinGecko Demo anahtarı desteği: piyasa yönü (TOTAL/BTC.D) anahtarla "
+                            "çekiliyor; temel analizde tarama başına ayrıntı bütçesi 12 → 40 coin."),
     ("1.3.0", "2026-09-29", "Sinyallere sürüm bilgisi eklendi; DeFi metrikleri yalnızca DeFi "
                             "protokollerinde hesaplanıyor (L1 zincirleri hariç)."),
     ("1.2.0", "2026-09-29", "Temel Analiz endeksi: şeffaflık, geliştirme, token ekonomisi, "
