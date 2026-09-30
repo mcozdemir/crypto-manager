@@ -2,11 +2,11 @@
 
 > **Bu belge ürünün çalışma mantığındaki tüm kuralların tek kaynağıdır.**
 > Sinyal tespiti, puanlama, eleme, kayıt veya tahmin mantığını değiştiren her
-> güncellemede bu belge de aynı commit içinde güncellenir (bkz. [§15](#15-değişiklik-ve-sürüm-kuralları)).
+> güncellemede bu belge de aynı commit içinde güncellenir (bkz. [§16](#16-değişiklik-ve-sürüm-kuralları)).
 >
-> Son güncelleme: **v1.3.1** · 2026-09-30 · Kodla karşılaştırma: `patterns.py`, `scoring.py`,
+> Son güncelleme: **v1.4.0** · 2026-09-30 · Kodla karşılaştırma: `patterns.py`, `scoring.py`,
 > `scanner.py`, `confidence.py`, `fundamentals.py`, `market_direction.py`, `journal.py`,
-> `backtest.py`, `auth.py`, `ayarlar.py`
+> `backtest.py`, `auth.py`, `ayarlar.py`, `binance_client.py`, `trading.py`, `profiles.py`
 
 ## İçindekiler
 
@@ -23,9 +23,10 @@
 11. [Sinyal günlüğü](#11-sinyal-günlüğü)
 12. [Backtest](#12-backtest)
 13. [Coin Ara](#13-coin-ara)
-14. [Erişim kuralları](#14-erişim-kuralları)
-15. [Değişiklik ve sürüm kuralları](#15-değişiklik-ve-sürüm-kuralları)
-16. [Bilinen sınırlamalar](#16-bilinen-sınırlamalar)
+14. [Binance ile emir açma](#14-binance-ile-emir-açma)
+15. [Erişim ve profil kuralları](#15-erişim-ve-profil-kuralları)
+16. [Değişiklik ve sürüm kuralları](#16-değişiklik-ve-sürüm-kuralları)
+17. [Bilinen sınırlamalar](#17-bilinen-sınırlamalar)
 
 ---
 
@@ -43,7 +44,8 @@
   kullanılır. Backtest de yürüyen pencereyle (walk-forward) çalışır.
 - **Veri alınamayan bileşen puanı bozmaz.** Eksik bileşen hesaptan çıkarılır, kalan
   bileşenlerin ağırlıkları yeniden dağıtılır; arayüzde "veri yok" olarak gösterilir.
-- Sistem yatırım tavsiyesi vermez; karar destek aracıdır.
+- Sistem yatırım tavsiyesi vermez; karar destek aracıdır. Emir yalnızca kullanıcı özeti
+  görüp onayladığında, kullanıcının kendi Binance anahtarıyla açılır; otomatik işlem yoktur.
 
 ## 2. Taranan evren
 
@@ -286,7 +288,72 @@ Sonuç 60 saniye önbelleklenir.
   ayrı bölümde gösterilir. Güven endeksleri her ikisi için de hesaplanır.
 - Yalnızca eşiği geçen (aktif) sinyaller günlüğe yazılır. Yön çakışması kuralı aynen uygulanır.
 
-## 14. Erişim kuralları
+## 14. Binance ile emir açma
+
+Tarama sonuçları, Coin Ara ve Sinyal Günlüğü tablolarındaki **⇅ İşlem** butonu emir penceresini
+açar. Durumu HEDEF/STOP olan (kapanmış) sinyallerde buton gösterilmez.
+
+**Hesap ve piyasa**
+
+- Her kullanıcı kendi Binance anahtarını **Profil → Binance API** bölümünden girer; başka
+  kullanıcının anahtarı/emri görülemez.
+- İki hesap türü: **Demo** (Binance Demo Trading, sahte bakiye — varsayılan) ve **Canlı**
+  (gerçek para). Canlıya geçiş profilde ayrıca onay ister.
+- Piyasalar: **Spot** (yalnızca LONG) ve **USDT-M Vadeli** (LONG + SHORT, süresiz sözleşme).
+  SHORT sinyaller her zaman Vadeli'de açılır.
+- Varsayılanlar (profilde değiştirilebilir, her emirde ayrıca seçilebilir): Demo, Vadeli,
+  3x, İzole marj, 50 USDT, piyasa emri.
+
+**Emir girdileri ve doğrulama** (sunucu her seferinde yeniden kontrol eder)
+
+- Girdi: piyasa, giriş türü (**piyasa** veya **limit** + limit fiyatı), yatırım tutarı (USDT;
+  vadelide marj), kaldıraç (**1–20x**), marj tipi (İzole/Çapraz), hedef, stop. Hedef ve stop
+  sinyalden gelir, değiştirilebilir.
+- LONG: `stop < giriş < hedef`; SHORT: `hedef < giriş < stop`. Piyasa emrinde güncel fiyat
+  hedef/stop aralığının dışındaysa emir reddedilir ("sinyal bayatlamış olabilir").
+- Fiyatlar paritenin fiyat adımına yuvarlanır; miktar = `tutar × kaldıraç / giriş`, miktar
+  adımına **aşağı** yuvarlanır. Binance'in minimum miktar ve minimum emir tutarı (notional)
+  kuralları uygulanır.
+- Vadelide tahmini tasfiye fiyatı (bakım marjı %0,5 varsayımıyla) hesaplanır; **stop tasfiye
+  fiyatının ötesindeyse emir reddedilir**.
+- Kullanılabilir bakiye marj + ücretlerden azsa emir reddedilir.
+- Uyarılar (engellemez): risk/ödül < 1, kaldıraç ≥ 10x, çapraz marj, limit fiyatın güncel
+  fiyattan uzaklığı.
+
+**Emir özeti ve onay**
+
+- Emirden önce özet gösterilir: hesap, parite/yön/piyasa, giriş, miktar, pozisyon büyüklüğü,
+  marj ve kaldıraç, tahmini tasfiye, hedef/stop, hedefte kâr ve stopta zarar (USDT ve marja
+  göre %), risk/ödül, tahmini ücret (spot %0,1, vadeli %0,05 × giriş+çıkış), bakiye ve
+  Binance'e gönderilecek emirlerin listesi.
+- Gönderim için "Özeti okudum" onayı zorunludur; **Canlı** hesapta ayrıca `ONAYLA` yazılır.
+- Gönderim anında özet sunucuda güncel fiyatla **yeniden hesaplanır**.
+- Aynı kullanıcı aynı anda tek emir gönderebilir; aynı parite/yön/piyasa/tutar 15 sn içinde
+  tekrar gönderilemez (çift tıklama koruması).
+
+**Binance'e gönderilen emirler**
+
+| Durum | Emirler |
+|---|---|
+| Spot, piyasa | `MARKET` alım (USDT tutarıyla) → dolan miktar (komisyon düşülerek) için **OCO** satış: hedef `LIMIT_MAKER`, stop `STOP_LOSS_LIMIT` (limit fiyatı stop'un %0,3 altı) |
+| Spot, limit | **OTOCO**: `LIMIT` alım dolunca otomatik OCO satış (hedef + stop) |
+| Vadeli | Marj tipi → kaldıraç → giriş (`MARKET` veya `LIMIT GTC`) → **koşullu emirler** (Algo Order API): `STOP_MARKET` ve `TAKE_PROFIT_MARKET`, `closePosition=true`, işaret fiyatıyla (`MARK_PRICE`) tetiklenir. Hedge modunda `positionSide` otomatik eklenir |
+
+- Hedef/stop emirlerinden biri kurulamazsa emir **KORUMASIZ** olarak işaretlenir ve kullanıcıya
+  Binance'ten elle girmesi söylenir.
+- Emir durumları: `GÖNDERİLDİ` (giriş + koruma emirleri kuruldu), `KORUMASIZ`, `HATA`
+  (hiçbir emir açılmadı). Tüm denemeler **Profil → Emirlerim**'de listelenir.
+- Uygulama pozisyonu sonradan takip etmez/kapatmaz; limit giriş dolmazsa emir Binance'te
+  bekler, iptal Binance'ten yapılır.
+
+**API anahtarı kuralları**
+
+- Anahtar kaydedilmeden önce Binance'e bağlanılarak doğrulanır (spot ve/veya vadeli).
+- Canlı anahtarda **çekim (withdraw) izni açıksa anahtar reddedilir**.
+- Anahtar ve secret veritabanında şifreli saklanır; tarayıcıya yalnızca ilk/son 4 karakter
+  gösterilir.
+
+## 15. Erişim ve profil kuralları
 
 - Tüm sayfalar ve API'ler giriş gerektirir (yalnızca `/login` ve `/healthz` açık).
 - Giriş: kullanıcı adı + Authenticator uygulamasının ürettiği **6 haneli, 30 saniyelik** kod
@@ -296,8 +363,13 @@ Sonuç 60 saniye önbelleklenir.
   15 dakika kilit. Hata mesajı kullanıcının var olup olmadığını belli etmez.
 - Oturum süresi **12 saat**.
 - Dışarıdan kayıt yoktur; kullanıcılar yalnızca `manage_users.py` ile eklenir/kapatılır.
+- **Profil** (`/profile`): kullanıcı kendi adını değiştirebilir (3–32 karakter; küçük harf,
+  rakam, `.`, `_`, `-`; benzersiz). Authenticator kodu değişmez, sonraki girişte yeni ad
+  kullanılır. Profil fotoğrafı: JPG/PNG/WEBP, en fazla 5 MB, 256×256 kare JPEG'e kırpılır;
+  fotoğraf yoksa baş harf gösterilir.
+- Profil ve emir API'lerinde yazma istekleri `X-CM-Request` başlığı ister (CSRF koruması).
 
-## 15. Değişiklik ve sürüm kuralları
+## 16. Değişiklik ve sürüm kuralları
 
 - Sinyal tespiti, puanlama, eleme, kayıt veya tahmin mantığını değiştiren her değişiklikte:
   1. `version.py` → `VERSION` artırılır (büyük değişiklik: 1.3 → 1.4; küçük düzeltme:
@@ -311,13 +383,14 @@ Sonuç 60 saniye önbelleklenir.
 
 | Sürüm | Tarih | Değişiklik |
 |---|---|---|
+| 1.4.0 | 2026-09-30 | Binance ile emir açma (Spot + Vadeli, Demo + Canlı), emir özeti, otomatik hedef/stop; profil sayfası |
 | 1.3.1 | 2026-09-30 | CoinGecko Demo anahtarı: piyasa yönü anahtarla; temel analiz ayrıntı bütçesi 12 → 40 |
 | 1.3.0 | 2026-09-29 | Sinyallere sürüm bilgisi; DeFi metrikleri yalnızca DeFi protokollerinde |
 | 1.2.0 | 2026-09-29 | Temel Analiz endeksi |
 | 1.1.0 | 2026-09-29 | Güven endeksleri: geçmiş başarı, piyasa yönü (şimdi), Crypto Manager, risk/ödül |
 | 1.0.0 | 2026-09-21 | Formasyon skoru ve tahmini başarı olasılığı |
 
-## 16. Bilinen sınırlamalar
+## 17. Bilinen sınırlamalar
 
 - Durum güncellemesi yalnızca **anlık** fiyata bakar; iki kontrol arasında hedefe/stop'a değip
   dönen hareketler kaçabilir (backtest mum içi yüksek/düşük değerleri kullanır).
@@ -326,3 +399,7 @@ Sonuç 60 saniye önbelleklenir.
 - Temel analiz kısa vadeli (1H) hareketlerde zayıf bir göstergedir.
 - Binance ABD IP'lerini engeller; sunucu Frankfurt'ta çalışır.
 - Ücretsiz API limitleri nedeniyle temel analiz ilk taramalarda "kısmi" olabilir.
+- Render'ın çıkış IP'leri sabit olmadığından Binance anahtarında IP kısıtlaması
+  kullanılamaz; bu tür anahtarlar Binance tarafından **90 gün** sonra (ya da 30 gün
+  kullanılmazsa) silinir ve yeniden girilmesi gerekir.
+- Tasfiye fiyatı yaklaşıktır (kademeli bakım marjı ve fonlama dikkate alınmaz).

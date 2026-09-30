@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profil · Kripto Formasyon Tarayıcı</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel-2: #1e2230; --border: #2a2f3f;
+    --text: #e6e8ef; --muted: #8b93a7; --green: #26a69a; --red: #ef5350;
+    --blue: #4f8ef7; --amber: #f5a623;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 16px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  header a:hover { color: var(--text); }
+  header h1 { font-size: 18px; margin: 0; }
+  main { max-width: 900px; margin: 0 auto; padding: 22px 16px 60px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  section { min-width: 0; }
+  #ordersWrap { overflow-x: auto; }
+  @media (max-width: 520px) { header { padding: 12px 16px; } section { padding: 16px 14px; } .grid { grid-template-columns: 1fr 1fr; } }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  section h2 { font-size: 16px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .muted { color: var(--muted); }
+  .up { color: var(--green); } .down { color: var(--red); } .mid { color: var(--amber); }
+  button { background: var(--blue); color: #fff; border: 0; border-radius: 7px; padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  button.secondary { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+  button.danger { background: transparent; border: 1px solid var(--red); color: var(--red); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  input, select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; font-size: 14px; }
+  input:focus, select:focus { outline: none; border-color: var(--blue); }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .grid input, .grid select { width: 100%; }
+  .avatar { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; border: 2px solid var(--border); }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tabs button { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+  .tabs button.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
+  .badge.demo { background: rgba(79,142,247,0.18); color: var(--blue); }
+  .badge.live { background: rgba(239,83,80,0.2); color: var(--red); }
+  .note { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-top: 10px; line-height: 1.55; }
+  .note.warn { background: rgba(245,166,35,0.12); color: var(--amber); border: 1px solid rgba(245,166,35,0.3); }
+  .note.err { background: rgba(239,83,80,0.1); color: var(--red); border: 1px solid rgba(239,83,80,0.35); }
+  .note.ok { background: rgba(38,166,154,0.1); color: var(--green); border: 1px solid rgba(38,166,154,0.35); }
+  .note.info { background: var(--panel-2); border: 1px solid var(--border); }
+  .note ol, .note ul { margin: 6px 0 0 18px; padding: 0; }
+  .status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+  .status-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+  .status-card b { display: block; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 8px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 8px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .scroll { overflow-x: auto; }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 8px;
+    font-size: 13px; display: none; z-index: 100; max-width: calc(100vw - 32px); }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">← Panele dön</a>
+  <h1>👤 Profil ve ayarlar</h1>
+  <form method="post" action="/logout" style="margin-left:auto;"><button class="secondary" type="submit">Çıkış</button></form>
+</header>
+
+<main>
+  <!-- Profil -->
+  <section>
+    <h2>Profil</h2>
+    <div class="row" style="align-items:center;">
+      <img class="avatar" id="avatar" alt="Profil fotoğrafı">
+      <div>
+        <input type="file" id="photoInput" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadPhoto(this)">
+        <button onclick="document.getElementById('photoInput').click()">Fotoğraf yükle</button>
+        <button class="secondary" onclick="removePhoto()">Kaldır</button>
+        <div class="muted" style="font-size:12px; margin-top:6px;">JPG, PNG veya WEBP · en fazla 5 MB · kare olarak kırpılır</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:16px;">
+      <div><label for="username">Kullanıcı adı</label><input id="username" maxlength="32" autocomplete="off"></div>
+      <button onclick="saveUsername()">Kaydet</button>
+    </div>
+    <div class="muted" style="font-size:12px; margin-top:6px;">3-32 karakter: küçük harf, rakam, nokta, alt çizgi, tire. Authenticator kodunuz değişmez.</div>
+    <div class="muted" style="font-size:12px; margin-top:10px;" id="accountInfo"></div>
+  </section>
+
+  <!-- İşlem ayarları -->
+  <section id="settings">
+    <h2>İşlem ayarları</h2>
+    <label>İşlem hesabı</label>
+    <div class="tabs" id="envTabs">
+      <button data-env="demo" onclick="setEnv('demo')">Demo (sahte bakiye)</button>
+      <button data-env="live" onclick="setEnv('live')">Canlı (gerçek para)</button>
+    </div>
+    <div id="envNote"></div>
+    <div class="grid" style="margin-top:14px;">
+      <div><label>Varsayılan piyasa (LONG)</label><select id="sMarket"><option value="futures">Vadeli (USDT-M)</option><option value="spot">Spot</option></select></div>
+      <div><label>Varsayılan giriş</label><select id="sEntry"><option value="MARKET">Piyasa emri</option><option value="LIMIT">Limit emir</option></select></div>
+      <div><label>Varsayılan tutar (USDT)</label><input type="number" id="sAmount" min="1" step="any"></div>
+      <div><label>Varsayılan kaldıraç (1–20x)</label><input type="number" id="sLev" min="1" max="20" step="1"></div>
+      <div><label>Marj tipi</label><select id="sMargin"><option value="ISOLATED">İzole</option><option value="CROSSED">Çapraz</option></select></div>
+    </div>
+    <div class="muted" style="font-size:12px; margin-top:8px;">SHORT sinyaller her zaman Vadeli'de açılır (Spot'ta açığa satış yok). Değerler her emirde ayrıca değiştirilebilir.</div>
+    <button style="margin-top:12px;" onclick="saveSettings()">Ayarları kaydet</button>
+  </section>
+
+  <!-- Binance API -->
+  <section id="binance">
+    <h2>Binance API</h2>
+    <div class="tabs" id="keyTabs">
+      <button data-env="demo" onclick="showKeyTab('demo')">Demo anahtarı</button>
+      <button data-env="live" onclick="showKeyTab('live')">Canlı anahtar</button>
+    </div>
+    <div id="keyPanel"></div>
+  </section>
+
+  <!-- Emirlerim -->
+  <section id="orders">
+    <h2>Emirlerim <button class="secondary" style="margin-left:auto;" onclick="loadOrders()">Yenile</button></h2>
+    <div id="ordersWrap" class="scroll"><div class="muted">Yükleniyor...</div></div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+let P = null, keyTab = 'demo';
+
+function api(url, method, body, isForm) {
+  const opts = { method: method || 'GET', headers: { 'X-CM-Request': '1' } };
+  if (body !== undefined) {
+    if (isForm) opts.body = body;
+    else { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  }
+  return fetch(url, opts).then(r => {
+    if (r.status === 401) { location.href = '/login'; }
+    return r.json().catch(() => ({ ok: false, message: 'Sunucu yanıtı okunamadı.' }));
+  });
+}
+
+function toast(msg, ok) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = ok ? 'var(--green)' : 'var(--red)';
+  t.style.color = '#fff';
+  t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 4000);
+}
+
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function load() {
+  api('/api/profile').then(d => {
+    if (!d.ok) { toast(d.message || 'Profil yüklenemedi'); return; }
+    P = d;
+    document.getElementById('avatar').src = d.avatar_url;
+    document.getElementById('username').value = d.username;
+    document.getElementById('accountInfo').textContent =
+      `Hesap oluşturma: ${(d.created_at || '').replace('T', ' ').slice(0, 16)} · Son giriş: ${(d.last_login_at || '-').replace('T', ' ').slice(0, 16)}`;
+    const s = d.settings;
+    document.getElementById('sMarket').value = s.default_market;
+    document.getElementById('sEntry').value = s.default_entry;
+    document.getElementById('sAmount').value = s.default_amount;
+    document.getElementById('sLev').value = s.default_leverage;
+    document.getElementById('sMargin').value = s.margin_type;
+    renderEnv();
+    showKeyTab(keyTab);
+  });
+}
+
+function renderEnv() {
+  const env = P.settings.trade_env;
+  document.querySelectorAll('#envTabs button').forEach(b => b.classList.toggle('on', b.dataset.env === env));
+  const has = !!P.keys[env];
+  document.getElementById('envNote').innerHTML = env === 'live'
+    ? `<div class="note err"><b>Canlı mod açık:</b> emirler gerçek parayla açılır ve her emirde ONAYLA yazmanız istenir.${has ? '' : ' Canlı anahtar henüz eklenmedi.'}</div>`
+    : `<div class="note info">Demo mod: emirler Binance Demo Trading hesabınızda sahte bakiyeyle açılır.${has ? '' : ' Demo anahtarı henüz eklenmedi.'}</div>`;
+}
+
+function setEnv(env) {
+  if (env === P.settings.trade_env) return;
+  let body = { trade_env: env };
+  if (env === 'live') {
+    if (!confirm('Canlı moda geçilsin mi? Bundan sonraki emirler GERÇEK para ile açılacak.')) return;
+    body.confirm_live = true;
+  }
+  api('/api/profile/settings', 'POST', body).then(d => {
+    if (!d.ok) { toast(d.message); return; }
+    P.settings = d.settings; renderEnv(); toast(env === 'live' ? 'Canlı moda geçildi' : 'Demo moda geçildi', true);
+  });
+}
+
+function saveSettings() {
+  api('/api/profile/settings', 'POST', {
+    default_market: document.getElementById('sMarket').value,
+    default_entry: document.getElementById('sEntry').value,
+    default_amount: document.getElementById('sAmount').value,
+    default_leverage: document.getElementById('sLev').value,
+    margin_type: document.getElementById('sMargin').value,
+  }).then(d => { if (!d.ok) { toast(d.message); return; } P.settings = d.settings; toast('Ayarlar kaydedildi', true); });
+}
+
+function saveUsername() {
+  api('/api/profile/username', 'POST', { username: document.getElementById('username').value }).then(d => {
+    if (!d.ok) { toast(d.message); return; }
+    toast(d.message || 'Kaydedildi', true); P.username = d.username;
+  });
+}
+
+function uploadPhoto(input) {
+  if (!input.files[0]) return;
+  const fd = new FormData(); fd.append('photo', input.files[0]);
+  api('/api/profile/avatar', 'POST', fd, true).then(d => {
+    input.value = '';
+    if (!d.ok) { toast(d.message); return; }
+    document.getElementById('avatar').src = d.avatar_url; toast('Fotoğraf güncellendi', true);
+  });
+}
+
+function removePhoto() {
+  api('/api/profile/avatar', 'DELETE').then(d => { if (d.ok) { document.getElementById('avatar').src = d.avatar_url; toast('Fotoğraf kaldırıldı', true); } });
+}
+
+// ---- Binance anahtarları ----
+function statusCards(st) {
+  if (!st || !st.env) return '';
+  const card = (title, x, extra) => `<div class="status-card"><b>${title}</b>${x && x.ok
+      ? `<span class="up">✓ Bağlantı başarılı</span><br>Kullanılabilir: ${Number(x.usdt || 0).toLocaleString('tr-TR', { maximumFractionDigits: 2 })} USDT${extra || ''}`
+      : `<span class="down">✗ ${esc(x && x.error || 'Erişim yok')}</span>`}</div>`;
+  let html = '<div class="status-grid">' + card('Spot', st.spot, st.spot && st.spot.ok && !st.spot.can_trade ? '<br><span class="down">İşlem izni kapalı</span>' : '') +
+    card('Vadeli (USDT-M)', st.futures, st.futures && st.futures.ok ? `<br>Pozisyon modu: ${st.futures.hedge_mode ? 'Hedge (çift yönlü)' : 'Tek yönlü'}` : '');
+  if (st.restrictions && !st.restrictions.error) {
+    const r = st.restrictions;
+    html += `<div class="status-card"><b>İzinler</b>
+      Spot işlem: ${r.spot_trading ? '<span class="up">açık</span>' : '<span class="down">kapalı</span>'}<br>
+      Vadeli: ${r.futures ? '<span class="up">açık</span>' : '<span class="down">kapalı</span>'}<br>
+      Çekim: ${r.withdrawals ? '<span class="down">AÇIK</span>' : '<span class="up">kapalı ✓</span>'}<br>
+      IP kısıtı: ${r.ip_restricted ? 'var' : '<span class="mid">yok (90 gün geçerli)</span>'}</div>`;
+  }
+  return html + '</div>';
+}
+
+function guide(env) {
+  if (env === 'demo') return `<div class="note info"><b>Demo anahtarı nasıl alınır?</b><ol>
+      <li><a href="https://demo.binance.com" target="_blank" rel="noopener" style="color:var(--blue)">demo.binance.com</a>'a Binance hesabınızla girin (Demo Trading).</li>
+      <li>Profil menüsünden <b>API Management</b> → <b>Create API</b> (System generated).</li>
+      <li>Oluşan <b>API Key</b> ve <b>Secret Key</b>'i aşağıya yapıştırın. Secret yalnızca bir kez gösterilir.</li></ol>
+      Demo hesabı sahte bakiye kullanır; bakiyeyi demo sayfasından sıfırlayabilirsiniz.</div>`;
+  return `<div class="note warn"><b>Canlı anahtar oluştururken:</b><ol>
+      <li>Binance → Hesap → <b>API Yönetimi</b> → API oluştur (System generated).</li>
+      <li>İzinler: <b>Okuma</b> + <b>Spot ve Marjin İşlemlerini Etkinleştir</b> + (SHORT için) <b>Vadeli İşlemleri Etkinleştir</b>.</li>
+      <li><b>Çekim (Withdrawals) iznini KESİNLİKLE açmayın</b> — açık anahtarlar kabul edilmez.</li>
+      <li>IP kısıtlaması: Uygulama Render'ın paylaşılan IP aralıklarından bağlandığı için sabit IP girilemez; "Sınırsız" seçin.
+          Binance bu tür anahtarları <b>90 gün sonra veya 30 gün kullanılmazsa</b> otomatik siler — süresi dolunca yenisini ekleyin.</li>
+      <li>Vadeli işlem için Binance'te Vadeli hesabınızın açık ve USDT bakiyesi olmalı.</li></ol></div>`;
+}
+
+function showKeyTab(env) {
+  keyTab = env;
+  document.querySelectorAll('#keyTabs button').forEach(b => b.classList.toggle('on', b.dataset.env === env));
+  const k = P.keys[env];
+  let html = '';
+  if (!P.encryption_ready) html += '<div class="note err">Sunucuda şifreleme anahtarı (APP_ENCRYPTION_KEY) tanımlı değil; API anahtarı kaydedilemez.</div>';
+  if (k) {
+    html += `<div class="note info">Kayıtlı anahtar: <b>${esc(k.hint)}</b> <span class="badge ${env}">${env === 'live' ? 'CANLI' : 'DEMO'}</span>
+      <span class="muted"> · son kontrol ${esc((k.verified_at || '').replace('T', ' ').slice(0, 16))}</span></div>
+      ${statusCards(k.status)}
+      <div class="row" style="margin-top:12px;">
+        <button class="secondary" onclick="testKey('${env}')">Bağlantıyı test et</button>
+        <button class="danger" onclick="deleteKey('${env}')">Anahtarı sil</button></div>
+      <details style="margin-top:14px;"><summary class="muted" style="cursor:pointer;">Anahtarı değiştir</summary>${keyForm(env)}</details>`;
+  } else {
+    html += guide(env) + keyForm(env);
+  }
+  document.getElementById('keyPanel').innerHTML = html;
+}
+
+function keyForm(env) {
+  return `<div class="grid" style="margin-top:12px;">
+      <div><label>API Key</label><input id="k_api" autocomplete="off" spellcheck="false"></div>
+      <div><label>Secret Key</label><input id="k_secret" type="password" autocomplete="new-password" spellcheck="false"></div></div>
+    <div class="muted" style="font-size:12px; margin-top:6px;">Anahtar şifrelenerek saklanır ve bir daha tarayıcıya gönderilmez. Kaydetmeden önce Binance'e bağlanılıp doğrulanır.</div>
+    <button style="margin-top:10px;" onclick="saveKey('${env}', this)">Doğrula ve kaydet</button><div id="keyMsg"></div>`;
+}
+
+function saveKey(env, btn) {
+  btn.disabled = true; btn.textContent = 'Doğrulanıyor...';
+  api('/api/profile/keys', 'POST', { env, api_key: document.getElementById('k_api').value, api_secret: document.getElementById('k_secret').value })
+    .then(d => {
+      btn.disabled = false; btn.textContent = 'Doğrula ve kaydet';
+      if (!d.ok) { document.getElementById('keyMsg').innerHTML = `<div class="note err">${esc(d.message)}</div>${statusCards(d.status)}`; return; }
+      P.keys = d.keys; toast('Anahtar doğrulandı ve kaydedildi', true); showKeyTab(env); renderEnv();
+    });
+}
+
+function testKey(env) {
+  api(`/api/profile/keys/${env}/test`, 'POST', {}).then(d => {
+    if (!d.ok) { toast(d.message); return; }
+    P.keys = d.keys; showKeyTab(env); toast('Bağlantı test edildi', true);
+  });
+}
+
+function deleteKey(env) {
+  if (!confirm('Bu anahtar silinsin mi?')) return;
+  api(`/api/profile/keys/${env}`, 'DELETE').then(d => { if (d.ok) { P.keys = d.keys; showKeyTab(env); renderEnv(); toast('Anahtar silindi', true); } });
+}
+
+// ---- Emirlerim ----
+function loadOrders() {
+  api('/api/trade/orders').then(d => {
+    const w = document.getElementById('ordersWrap');
+    if (!d.ok) { w.innerHTML = `<div class="note err">${esc(d.message)}</div>`; return; }
+    if (!d.orders.length) { w.innerHTML = '<div class="muted">Henüz emir yok. Tarama veya Sinyal Günlüğü tablosundaki "⇅ İşlem" butonuyla emir açabilirsiniz.</div>'; return; }
+    const st = s => s === 'GÖNDERİLDİ' ? '<span class="up">✓ Gönderildi</span>' : s === 'KORUMASIZ' ? '<span class="mid">⚠ Korumasız</span>' : '<span class="down">✗ Hata</span>';
+    w.innerHTML = `<table><thead><tr><th>Tarih</th><th>Hesap</th><th>Parite</th><th>Yön</th><th>Piyasa</th><th>Giriş</th><th>Tutar</th><th>Miktar</th><th>Hedef</th><th>Stop</th><th>Durum</th></tr></thead><tbody>` +
+      d.orders.map(o => `<tr title="${esc(o.error || '')}">
+        <td>${esc((o.created_at || '').replace('T', ' ').slice(0, 16))}</td>
+        <td><span class="badge ${o.env}">${o.env === 'live' ? 'CANLI' : 'DEMO'}</span></td>
+        <td><b>${esc(o.symbol)}</b></td>
+        <td class="${o.direction === 'LONG' ? 'up' : 'down'}">${o.direction}</td>
+        <td>${o.market === 'spot' ? 'Spot' : `Vadeli ${o.leverage}x`}</td>
+        <td>${o.entry_type === 'MARKET' ? 'Piyasa' : 'Limit'} ${esc(o.avg_price && Number(o.avg_price) > 0 ? o.avg_price : o.entry_price)}</td>
+        <td>${Number(o.amount_usdt).toLocaleString('tr-TR')} USDT</td>
+        <td>${esc(o.quantity)}</td><td>${esc(o.target)}</td><td>${esc(o.stop)}</td>
+        <td>${st(o.status)}${o.error ? `<div class="down" style="white-space:normal; max-width:260px;">${esc(o.error)}</div>` : ''}</td></tr>`).join('') + '</tbody></table>';
+  });
+}
+
+load();
+loadOrders();
+</script>
+</body>
+</html>

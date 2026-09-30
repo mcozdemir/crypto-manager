@@ -4,7 +4,7 @@
 > etkileyen her değişiklikte aynı commit içinde güncellenir. Ürün kuralları için:
 > [`KURALLAR.md`](KURALLAR.md).
 >
-> Son güncelleme: **v1.3.1** · 2026-09-30
+> Son güncelleme: **v1.4.0** · 2026-09-30
 
 ## 1. Genel bakış
 
@@ -37,6 +37,11 @@ flowchart LR
 |---|---|
 | `app.py` | Flask uygulaması: sayfalar, JSON API, arka plan iş parçacıkları (tarama, backtest, coin arama) |
 | `auth.py` | Giriş/çıkış, TOTP doğrulama, kaba kuvvet koruması, güvenlik başlıkları |
+| `profiles.py` | Profil sayfası ve API'si: kullanıcı adı, profil fotoğrafı, işlem varsayılanları, Binance API anahtarları |
+| `trading.py` | Emir API'si: bağlam, canlı fiyat, emir özeti (önizleme), gönderme, emir geçmişi |
+| `binance_client.py` | İmzalı Binance istemcisi (Spot + USDT-M Vadeli, Demo + Canlı), sembol kuralları, emir planı ve gönderimi |
+| `secretbox.py` | API anahtarlarının şifrelenmesi (Fernet, `APP_ENCRYPTION_KEY`) |
+| `templates/profile.html` | Profil sayfası (profil, işlem ayarları, Binance API, Emirlerim) |
 | `manage_users.py` | Komut satırından kullanıcı ekleme/listeleme/sıfırlama/kapatma/silme (QR kod) |
 | `scanner.py` | Tarama boru hattı (pipeline) orkestrasyonu: tam tarama ve tek coin arama |
 | `utils.py` | Binance spot REST istemcisi (sembol listesi, mum, fiyat) |
@@ -131,8 +136,23 @@ sequenceDiagram
 **`coin_fundamentals`** — `base` (ör. ETH), `cg_id`, `data_json`, `complete`,
 `updated_at` (24 saat geçerli).
 
+**`user_profiles`** — `user_id` (PK), `avatar_b64` (256×256 JPEG, base64), `avatar_updated`,
+`settings_json` (işlem varsayılanları: `trade_env`, `default_market`, `default_leverage`,
+`margin_type`, `default_amount`, `default_entry`), `updated_at`.
+
+**`exchange_keys`** — `(user_id, env)` birincil anahtar (`env`: `demo` | `live`),
+`api_key_enc`, `secret_enc` (Fernet ile şifreli), `key_hint` (ilk/son 4 karakter),
+`status_json` (son doğrulama: spot/vadeli bakiye, izinler), `verified_at`, `created_at`.
+
+**`trade_orders`** — her emir denemesi: `created_at`, `user_id`, `username`, `env`, `market`,
+`symbol`, `direction`, `entry_type`, `amount_usdt`, `leverage`, `margin_type`, `quantity`,
+`entry_price`, `avg_price`, `target`, `stop`, `status` (`GÖNDERİLDİ` / `KORUMASIZ` / `HATA`),
+`protected`, `signal_ref`, `result_json` (Binance yanıt özeti), `error`, `app_version`.
+İndeks: `(user_id, created_at)`.
+
 Şema değişiklikleri uygulama açılışında otomatik göç (migration) ile yapılır
-(`journal.init_db`, `ALTER TABLE ... ADD COLUMN`); elle işlem gerekmez.
+(`journal.init_db`, `ALTER TABLE ... ADD COLUMN`); profil/emir tabloları ilk kullanımda
+`CREATE TABLE IF NOT EXISTS` ile oluşur. Elle işlem gerekmez.
 
 ### 4.2 Bellek ve disk (geçici)
 
@@ -159,6 +179,7 @@ sequenceDiagram
 | CoinGecko | Piyasa rejimi, coin temel verileri | `/global`, `/coins/markets`, `/coins/{id}`, `/search` | `APP_COINGECKO_API_KEY` (Demo, dakikada 100 istek). Anahtarsız kullanım paylaşılan IP'lerde 403/429 verir |
 | GitHub | Proje deposunun son güncellemesi | `/repos/{owner}/{repo}`, `/orgs/{org}/repos` | Anahtarsız saatte 60 istek; isteğe bağlı `APP_GITHUB_API_TOKEN` |
 | DefiLlama | TVL, ücret geliri | `/protocols`, `/overview/fees` | Anahtarsız |
+| Binance işlem (imzalı) | Hesap/bakiye, anahtar izinleri, emir açma | Spot: `/api/v3/account`, `/api/v3/order`, `/api/v3/orderList/oco`, `/api/v3/orderList/otoco`, `/sapi/v1/account/apiRestrictions` (yalnızca canlı) · Vadeli: `/fapi/v2/balance`, `/fapi/v1/positionSide/dual`, `/fapi/v1/marginType`, `/fapi/v1/leverage`, `/fapi/v1/order`, `/fapi/v1/algoOrder` | Kullanıcının kendi anahtarı (HMAC-SHA256). Canlı: `api.binance.com`, `fapi.binance.com`; Demo: `demo-api.binance.com`, `demo-fapi.binance.com` |
 | Turso | Veritabanı | `https://<db>.turso.io/v2/pipeline` | `APP_TURSO_TECH_DB_URL`, `APP_TURSO_TECH_TOKEN` |
 
 ## 6. Ortam değişkenleri
@@ -169,6 +190,8 @@ sequenceDiagram
 | `APP_TURSO_TECH_TOKEN` | Evet (bulut) | `.env`, Render | Turso erişim anahtarı |
 | `APP_SECRET_KEY` | Render'da evet | Render (otomatik üretilir), isteğe bağlı `.env` | Oturum çerezlerini imzalar |
 | `APP_COINGECKO_API_KEY` | Önerilir | `.env`, Render | CoinGecko Demo anahtarı |
+| `APP_ENCRYPTION_KEY` | Emir özelliği için evet | `.env`, Render | Binance API anahtarlarını şifreleyen ana anahtar (≥ 16 karakter). **Yerel `.env` ile Render'da aynı olmalı** (ortak veritabanı); değişirse kayıtlı anahtarlar çözülemez, kullanıcılar yeniden girer |
+| `APP_BINANCE_URLS_JSON` | Hayır | Yalnızca test | Binance adreslerini sahte test sunucusuna yönlendirir |
 | `APP_GITHUB_API_TOKEN` | Hayır | `.env`, Render | GitHub API limiti için |
 | `GITHUB_USERNAME`, `GITHUB_CRYPTO_MANAGER_TOKEN` | Hayır | Yalnızca geliştirici `.env` | Mac'ten `git push` yetkisi (uygulama kullanmaz) |
 | `APP_NAME` | Hayır | Render | Başlıktaki etiket |
@@ -211,6 +234,15 @@ flowchart LR
   `Referrer-Policy: same-origin`, Render'da HSTS.
 - Render ters vekil arkasında doğru IP/HTTPS için `ProxyFix`.
 - Sırlar yalnızca `.env` ve Render ortam değişkenlerinde; repo herkese açıktır.
+- **Binance API anahtarları:** kullanıcı başına, Fernet (AES-128-CBC + HMAC-SHA256) ile
+  şifreli saklanır; ana anahtar `APP_ENCRYPTION_KEY`. Çözülmüş anahtar yalnızca emir/doğrulama
+  anında sunucu belleğinde kullanılır, tarayıcıya ve loglara yazılmaz. Canlı anahtarda çekim
+  izni açıksa kayıt reddedilir.
+- **CSRF:** profil ve emir API'lerinde yazma istekleri `X-CM-Request: 1` başlığı ister
+  (başka siteler CORS ön kontrolü olmadan bu başlığı gönderemez); çerez `SameSite=Lax`.
+- İstek gövdesi en fazla 6 MB (`MAX_CONTENT_LENGTH`, profil fotoğrafı için).
+- **Emir güvenliği:** özet gönderimde sunucuda yeniden hesaplanır; kullanıcı başına kilit ve
+  15 sn çift emir engeli; canlıda `ONAYLA` zorunlu; her deneme `trade_orders`'a yazılır.
 
 ## 9. Yerel geliştirme
 
@@ -226,6 +258,9 @@ cp .env.example .env               # Turso + CoinGecko değerlerini doldurun
   ortaktır). Deneme için `.env` olmadan çalıştırın → yerel `signal_journal.db`.
 - Test yaklaşımı: gerçek piyasa verisiyle yerel SQLite üzerinde tarama; arayüz Flask test
   istemcisi ve tarayıcı ekran görüntüleriyle doğrulanır.
+- Emir akışı gerçek emir açmadan, `APP_BINANCE_URLS_JSON` ile sahte bir Binance sunucusuna
+  yönlendirilerek test edilir (imza, parametreler, OCO/OTOCO/Algo emir sırası). Gerçek
+  denemeler yalnızca **Demo** anahtarıyla yapılır.
 
 ## 10. İzleme ve sorun giderme
 

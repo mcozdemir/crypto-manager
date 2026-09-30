@@ -36,6 +36,24 @@ from ayarlar import WEB_HOST, WEB_PORT, DEBUG_MODE, DEFAULT_TOP_N
 
 app = Flask(__name__)
 auth.init_app(app)  # kullanıcı adı + Authenticator kodu ile giriş (auth.py)
+app.config["MAX_CONTENT_LENGTH"] = 6 * 1024 * 1024  # profil fotoğrafı yüklemesi için üst sınır
+import profiles  # noqa: E402  (profil, fotoğraf, Binance API anahtarları)
+import trading   # noqa: E402  (Binance emir açma)
+app.register_blueprint(profiles.bp)
+app.register_blueprint(trading.bp)
+
+
+@app.context_processor
+def _inject_avatar():
+    from flask import session as _s
+    user = auth.get_user(_s["user"]) if _s.get("user") else None
+    if not user:
+        return {}
+    try:
+        profiles.init_tables()
+        return {"current_avatar": profiles.avatar_url(user)}
+    except Exception:  # noqa: BLE001
+        return {"current_avatar": f"/avatar/{user['id']}"}
 
 # Klasör adından otomatik versiyon etiketi (ör. "crypto_pattern_scannerv2" -> "v2").
 # Böylece aynı anda birden fazla klasör/versiyon çalıştırıldığında panelde ve

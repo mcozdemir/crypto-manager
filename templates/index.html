@@ -247,6 +247,42 @@
     .signal-table .col-dir { position: sticky; left: 110px; z-index: 2; background: var(--bg); }
     .signal-table thead .col-coin, .signal-table thead .col-dir { z-index: 3; }
   }
+  /* ---- Kullanıcı ve işlem ---- */
+  .user-chip { display: inline-flex; align-items: center; gap: 7px; margin-left: 14px; padding: 4px 10px 4px 4px;
+    border: 1px solid var(--border); border-radius: 20px; color: var(--text); text-decoration: none; font-size: 13px; }
+  .user-chip img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+  .user-chip:hover { background: var(--panel-2); }
+  .trade-btn { padding: 5px 10px; font-size: 12px; background: var(--amber); color: #111; white-space: nowrap; }
+  .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900; display: none;
+    align-items: flex-start; justify-content: center; overflow-y: auto; padding: 24px 12px; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; width: 100%;
+    max-width: 640px; padding: 20px 22px; }
+  .modal h3 { margin: 0 0 4px; font-size: 18px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .modal .close-x { margin-left: auto; background: transparent; color: var(--muted); font-size: 20px; padding: 0 6px; }
+  .env-badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 12px; }
+  .env-badge.demo { background: rgba(79,142,247,0.18); color: var(--blue); }
+  .env-badge.live { background: rgba(239,83,80,0.2); color: var(--red); }
+  .price-box { display: flex; gap: 18px; align-items: baseline; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; margin: 12px 0; flex-wrap: wrap; }
+  .price-box .big { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  .tgrid label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .tgrid input, .tgrid select { width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; font-size: 14px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+  .seg button { background: var(--panel-2); color: var(--muted); border-radius: 0; padding: 7px 12px; font-size: 13px; }
+  .seg button.on { background: var(--blue); color: #fff; }
+  .seg button:disabled { opacity: 0.35; }
+  .summary-table { width: 100%; font-size: 13px; margin-top: 8px; }
+  .summary-table td { padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  .summary-table td:last-child { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .summary-table tbody tr { cursor: default; }
+  .note { font-size: 12px; padding: 9px 11px; border-radius: 7px; margin-top: 10px; line-height: 1.5; }
+  .note.warn { background: rgba(245,166,35,0.12); color: var(--amber); border: 1px solid rgba(245,166,35,0.3); }
+  .note.err { background: rgba(239,83,80,0.1); color: var(--red); border: 1px solid rgba(239,83,80,0.35); }
+  .note.ok { background: rgba(38,166,154,0.1); color: var(--green); border: 1px solid rgba(38,166,154,0.35); }
+  .note.plain { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  @media (max-width: 560px) { .tgrid { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -265,7 +301,10 @@
     <button id="scanBtn" onclick="startScan()">Taramayı Başlat</button>
     <button id="exportBtn" onclick="exportExcel()" disabled>⬇ Excel'e İndir</button>
     {% if current_user %}
-    <span style="margin-left:14px; font-size:13px; color:var(--muted);">👤 {{ current_user }}</span>
+    <a href="/profile" class="user-chip" title="Profil ve ayarlar">
+      <img src="{{ current_avatar or '' }}" alt="" onerror="this.style.display='none'">
+      <span>{{ current_user }}</span>
+    </a>
     <form method="post" action="/logout" style="display:inline; margin:0;">
       <button type="submit" style="background:var(--panel-2); border:1px solid var(--border);">Çıkış</button>
     </form>
@@ -413,6 +452,16 @@
 
 </main>
 
+<!-- ============== İŞLEM (EMİR) PENCERESİ ============== -->
+<div class="modal-back" id="tradeBack" onclick="if (event.target === this) closeTrade()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="tradeTitle">
+    <h3 id="tradeTitle"><span id="tTitle"></span> <span class="env-badge" id="tEnv"></span>
+      <button class="close-x" onclick="closeTrade()" aria-label="Kapat">×</button></h3>
+    <div class="muted" id="tSub" style="font-size:12px;"></div>
+    <div id="tBody"></div>
+  </div>
+</div>
+
 <script>
 // Oturum süresi dolduysa (401) giriş sayfasına yönlendir
 (function () {
@@ -442,14 +491,15 @@ const COLUMN_INFO = {
   stop: 'Zarar kes seviyesi: fiyat buraya ulaşırsa formasyon geçersiz sayılır. Yanındaki yüzde, girişe uzaklığıdır.',
   rr: 'Risk/Ödül: hedefe olan mesafenin stop\'a olan mesafeye oranı. 1 : 2 = 1 birim riske karşı 2 birim potansiyel kazanç. 1 : 1\'in altı genellikle elverişsiz kabul edilir.',
   status: 'Yeni: bu taramada bulundu. Açık: takipte. Hedef: fiyat stop\'tan önce hedefe ulaştı. Stop: zarar kes seviyesine ulaştı.',
-  ai: 'Satırdaki coin için tüm verileri yapay zekâya yorumlatır. Yakında eklenecek.',
+  trade: 'Bu sinyal için Binance\'te emir açar: güncel fiyat, yatırım tutarı, hedef ve stop ile birlikte önce bir emir özeti gösterilir, onayınızdan sonra gönderilir. Profilinizde Binance API anahtarınız tanımlı olmalı. Demo modunda sahte bakiyeyle işlem yapılır.',
+  ai: 'Satırdaki coin için tüm verileri yapay zekâya yorumlatır. Faz 2\'de eklenecek.',
 };
 
 const SIGNAL_COLUMNS = [
   ['date', 'Tarih'], ['coin', 'Coin · TF'], ['dir', 'Yön'], ['pattern', 'Formasyon'],
   ['market', 'Piyasa Yönü'], ['fundamental', 'Temel Analiz'], ['cm', 'Crypto Manager'],
   ['entry', 'Giriş'], ['current', 'Güncel Fiyat'], ['target', 'Hedef'], ['stop', 'Stop'],
-  ['rr', 'Risk/Ödül'], ['status', 'Durum'], ['ai', 'AI'],
+  ['rr', 'Risk/Ödül'], ['status', 'Durum'], ['trade', 'İşlem'], ['ai', 'AI'],
 ];
 
 function infoIcon(key) {
@@ -564,7 +614,9 @@ function statusCell(st) {
   return '<span class="st st-open">⏳ Açık</span>';
 }
 
+const ROW_REGISTRY = {};
 function renderSignalTable(rows, group, opts = {}) {
+  ROW_REGISTRY[group] = rows || [];
   if (!rows || rows.length === 0) {
     return `<div class="empty-state">${opts.empty || 'Sonuç bulunamadı.'}</div>`;
   }
@@ -602,7 +654,9 @@ function renderSignalTable(rows, group, opts = {}) {
       <td class="col-stop">${fmtPrice(r.stop)}<div class="sub muted">${fmtPct(r.stop_pct)}</div></td>
       <td class="col-rr">${r.rr ? `<span class="${r.rr >= 1.5 ? 'up' : r.rr >= 1 ? 'mid' : 'down'}">1 : ${Number(r.rr).toLocaleString('tr-TR', { maximumFractionDigits: 1, minimumFractionDigits: 1 })}</span>` : '-'}</td>
       <td class="col-status">${statusCell(r.status)}</td>
-      <td class="col-ai"><button class="ai-btn" disabled title="Yakında" onclick="event.stopPropagation()">🔍</button></td>
+      <td class="col-trade">${(r.status === 'HEDEF' || r.status === 'STOP') ? '<span class="muted">kapandı</span>' :
+        `<button class="trade-btn" onclick="event.stopPropagation(); openTrade('${group}', ${i})">⇅ İşlem</button>`}</td>
+      <td class="col-ai"><button class="ai-btn" disabled title="Faz 2" onclick="event.stopPropagation()">🔍</button></td>
     </tr>
     <tr class="detail-row" id="detail-${group}-${i}"><td colspan="${SIGNAL_COLUMNS.length}">${detailHtml(r)}</td></tr>`;
   });
@@ -1170,6 +1224,201 @@ function clearJournal() {
   if (!confirm('Tüm sinyal günlüğü kalıcı olarak silinecek. Ortak (bulut) veritabanı kullanılıyorsa bu işlem projeyi kullanan HERKES için geçmişi siler. Emin misiniz?')) return;
   fetch('/api/journal/clear', { method: 'POST' }).then(r => r.json()).then(() => fetchJournal());
 }
+
+// ============== İŞLEM (EMİR) ==============
+function apiPost(url, body) {
+  return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CM-Request': '1' },
+                      body: JSON.stringify(body || {}) })
+    .then(r => r.json().catch(() => ({ ok: false, message: 'Sunucu yanıtı okunamadı.' })));
+}
+
+const T = { row: null, ctx: null, form: null, plan: null, timer: null, busy: false };
+
+function openTrade(group, i) {
+  const r = (ROW_REGISTRY[group] || [])[i];
+  if (!r) return;
+  T.row = r; T.plan = null;
+  document.getElementById('tTitle').textContent = `${r.symbol} · ${r.direction}`;
+  document.getElementById('tSub').textContent = `${(r.timeframe || '').toUpperCase()} · ${r.pattern} · sinyal girişi ${fmtPrice(r.entry)}`;
+  document.getElementById('tBody').innerHTML = '<div class="empty-state">Yükleniyor...</div>';
+  document.getElementById('tradeBack').style.display = 'flex';
+  fetch('/api/trade/context').then(x => x.json()).then(ctx => {
+    T.ctx = ctx;
+    if (!ctx.ok) { tBody(`<div class="note err">${ctx.message || 'Hata'}</div>`); return; }
+    const envEl = document.getElementById('tEnv');
+    envEl.textContent = ctx.env === 'live' ? 'CANLI' : 'DEMO';
+    envEl.className = 'env-badge ' + ctx.env;
+    if (!ctx.has_key) {
+      tBody(`<div class="note warn">${ctx.env_label} için Binance API anahtarınız tanımlı değil.
+        <a href="/profile#binance" style="color:inherit; font-weight:700;">Profil → Binance API</a> bölümünden ekleyin.</div>`);
+      return;
+    }
+    const s = ctx.settings;
+    const market = r.direction === 'SHORT' ? 'futures' : s.default_market;
+    T.form = { market, entry_type: s.default_entry || 'MARKET', amount_usdt: s.default_amount,
+               leverage: s.default_leverage, margin_type: s.margin_type,
+               target: r.target, stop: r.stop, limit_price: '' };
+    renderTradeForm();
+    startQuote();
+  });
+}
+
+function closeTrade() {
+  document.getElementById('tradeBack').style.display = 'none';
+  if (T.timer) clearInterval(T.timer);
+  T.timer = null;
+}
+
+function tBody(html) { document.getElementById('tBody').innerHTML = html; }
+
+function renderTradeForm() {
+  const f = T.form, r = T.row, fut = f.market === 'futures';
+  tBody(`
+    <div class="price-box">
+      <div><div class="muted" style="font-size:12px;">Güncel fiyat</div><div class="big" id="tPrice">…</div></div>
+      <div><div class="muted" style="font-size:12px;">Sinyal girişine göre</div><div id="tDiff">…</div></div>
+      <div id="tMarkWrap" style="display:none;"><div class="muted" style="font-size:12px;">İşaret fiyatı</div><div id="tMark"></div></div>
+      <div class="muted" style="font-size:11px; margin-left:auto;" id="tTs"></div>
+    </div>
+    <div class="tgrid">
+      <div><label>Piyasa</label><div class="seg">
+        <button type="button" class="${f.market === 'spot' ? 'on' : ''}" ${r.direction === 'SHORT' ? 'disabled title="Spot piyasada SHORT açılamaz"' : ''} onclick="setT('market','spot')">Spot</button>
+        <button type="button" class="${fut ? 'on' : ''}" onclick="setT('market','futures')">Vadeli (USDT-M)</button></div></div>
+      <div><label>Giriş emri</label><div class="seg">
+        <button type="button" class="${f.entry_type === 'MARKET' ? 'on' : ''}" onclick="setT('entry_type','MARKET')">Piyasa</button>
+        <button type="button" class="${f.entry_type === 'LIMIT' ? 'on' : ''}" onclick="setT('entry_type','LIMIT')">Limit</button></div></div>
+      <div><label>${fut ? 'Yatırım tutarı / marj (USDT)' : 'Yatırım tutarı (USDT)'}</label>
+        <input type="number" min="1" step="any" value="${f.amount_usdt}" oninput="setT('amount_usdt', this.value, true)"></div>
+      <div style="${f.entry_type === 'LIMIT' ? '' : 'display:none'}"><label>Limit giriş fiyatı</label>
+        <input type="number" step="any" id="tLimit" value="${f.limit_price}" oninput="setT('limit_price', this.value, true)"></div>
+      <div style="${fut ? '' : 'display:none'}"><label>Kaldıraç (1–${T.ctx.max_leverage}x)</label>
+        <input type="number" min="1" max="${T.ctx.max_leverage}" step="1" value="${f.leverage}" oninput="setT('leverage', this.value, true)"></div>
+      <div style="${fut ? '' : 'display:none'}"><label>Marj tipi</label>
+        <select onchange="setT('margin_type', this.value, true)">
+          <option value="ISOLATED" ${f.margin_type === 'ISOLATED' ? 'selected' : ''}>İzole</option>
+          <option value="CROSSED" ${f.margin_type === 'CROSSED' ? 'selected' : ''}>Çapraz</option></select></div>
+      <div><label>Hedef (kâr al)</label><input type="number" step="any" value="${f.target}" oninput="setT('target', this.value, true)"></div>
+      <div><label>Stop (zarar kes)</label><input type="number" step="any" value="${f.stop}" oninput="setT('stop', this.value, true)"></div>
+    </div>
+    <div style="margin-top:14px; display:flex; gap:10px;">
+      <button type="button" onclick="previewTrade()" id="tPreviewBtn">Emir özetini gör</button>
+      <button type="button" onclick="closeTrade()" style="background:var(--panel-2); border:1px solid var(--border);">Vazgeç</button>
+    </div>
+    <div id="tPlan"></div>`);
+  refreshQuote();
+}
+
+function setT(key, val, noRender) {
+  T.form[key] = val;
+  T.plan = null;
+  if (noRender) { const p = document.getElementById('tPlan'); if (p) p.innerHTML = ''; return; }
+  if (key === 'market' && T.timer) { clearInterval(T.timer); }
+  renderTradeForm();
+  if (key === 'market') startQuote();
+}
+
+function startQuote() {
+  if (T.timer) clearInterval(T.timer);
+  T.timer = setInterval(refreshQuote, 3000);
+}
+
+function refreshQuote() {
+  if (!T.row || !T.form) return;
+  fetch(`/api/trade/quote?symbol=${encodeURIComponent(T.row.symbol)}&market=${T.form.market}`)
+    .then(x => x.json()).then(q => {
+      const el = document.getElementById('tPrice');
+      if (!el) return;
+      if (!q.ok) { el.textContent = '–'; document.getElementById('tDiff').innerHTML = `<span class="down">${q.message}</span>`; return; }
+      el.textContent = fmtPrice(q.price);
+      const diff = T.row.entry ? (q.price / T.row.entry - 1) * 100 : null;
+      const sign = T.row.direction === 'LONG' ? 1 : -1;
+      document.getElementById('tDiff').innerHTML = diff === null ? '–' :
+        `<span class="${diff * sign >= 0 ? 'up' : 'down'}">${fmtPct(diff)}</span>`;
+      if (q.mark) { document.getElementById('tMarkWrap').style.display = ''; document.getElementById('tMark').textContent = fmtPrice(q.mark); }
+      document.getElementById('tTs').textContent = 'canlı · ' + new Date(q.ts * 1000).toLocaleTimeString('tr-TR');
+      const lim = document.getElementById('tLimit');
+      if (lim && !T.form.limit_price) { lim.value = q.price; T.form.limit_price = q.price; }
+    }).catch(() => {});
+}
+
+function tradeRequest() {
+  const f = T.form, r = T.row;
+  return { symbol: r.symbol, direction: r.direction, market: f.market, entry_type: f.entry_type,
+           amount_usdt: f.amount_usdt, leverage: f.leverage, margin_type: f.margin_type,
+           target: f.target, stop: f.stop, limit_price: f.limit_price,
+           signal_ref: `${r.symbol}|${r.timeframe}|${r.pattern}|${r.direction}|${r.date || ''}` };
+}
+
+function previewTrade() {
+  const box = document.getElementById('tPlan');
+  const btn = document.getElementById('tPreviewBtn');
+  btn.disabled = true;
+  box.innerHTML = '<div class="note plain">Özet hazırlanıyor (bakiye ve Binance kuralları kontrol ediliyor)...</div>';
+  apiPost('/api/trade/preview', tradeRequest()).then(d => {
+    btn.disabled = false;
+    if (!d.ok) { box.innerHTML = `<div class="note err">${d.message}</div>`; return; }
+    T.plan = d.plan;
+    renderPlan(d.plan);
+  }).catch(() => { btn.disabled = false; box.innerHTML = '<div class="note err">Bağlantı hatası.</div>'; });
+}
+
+function money(v) { return v === null || v === undefined ? '-' : Number(v).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USDT'; }
+
+function renderPlan(p) {
+  const live = p.env === 'live';
+  const pnlRow = (label, v, pct) => `<tr><td>${label}</td><td class="${Number(v) >= 0 ? 'up' : 'down'}">${Number(v) >= 0 ? '+' : ''}${money(v)} (${pct >= 0 ? '+' : ''}%${Number(pct).toLocaleString('tr-TR')})</td></tr>`;
+  let html = `<h4 style="margin:16px 0 4px;">Emir özeti</h4>
+    <table class="summary-table"><tbody>
+      <tr><td>Hesap</td><td class="${live ? 'down' : ''}">${p.env_label}</td></tr>
+      <tr><td>Parite · yön · piyasa</td><td>${p.symbol} · ${p.direction} · ${p.market_label}</td></tr>
+      <tr><td>Giriş</td><td>${p.entry_type === 'MARKET' ? 'Piyasa emri ≈ ' : 'Limit '}${fmtPrice(p.entry_price)}</td></tr>
+      <tr><td>Miktar</td><td>${p.quantity} ${p.base}</td></tr>
+      <tr><td>Pozisyon büyüklüğü</td><td>${money(p.notional)}</td></tr>
+      ${p.market === 'futures' ? `<tr><td>Kullanılacak marj · kaldıraç</td><td>${money(p.margin)} · ${p.leverage}x ${p.margin_type === 'ISOLATED' ? 'İzole' : 'Çapraz'}</td></tr>
+      <tr><td>Tahmini tasfiye fiyatı</td><td>${fmtPrice(p.liquidation)}</td></tr>` : ''}
+      <tr><td>Hedef (kâr al)</td><td>${fmtPrice(p.target)}</td></tr>
+      <tr><td>Stop (zarar kes)</td><td>${fmtPrice(p.stop)}</td></tr>
+      ${pnlRow('Hedefte tahmini kâr', p.pnl_target, p.pnl_target_pct)}
+      ${pnlRow('Stopta tahmini zarar', p.pnl_stop, p.pnl_stop_pct)}
+      <tr><td>Risk / ödül</td><td>1 : ${Number(p.rr).toLocaleString('tr-TR')}</td></tr>
+      <tr><td>Tahmini işlem ücreti (giriş + çıkış)</td><td>${money(p.est_fees)}</td></tr>
+      <tr><td>Kullanılabilir bakiye</td><td>${money(p.balance)}</td></tr>
+    </tbody></table>
+    <div class="note plain"><b>Gönderilecek emirler:</b><ol style="margin:6px 0 0 18px; padding:0;">${p.steps.map(x => `<li>${x}</li>`).join('')}</ol></div>
+    ${(p.warnings || []).map(w => `<div class="note warn">⚠ ${w}</div>`).join('')}
+    <div class="note ${live ? 'err' : 'plain'}">${live
+      ? '<b>Bu emir GERÇEK para ile açılacak.</b> Kripto piyasaları çok oynaktır; sistemin sinyalleri yatırım tavsiyesi değildir. Kayıp riskini kabul ediyorsanız aşağıya <b>ONAYLA</b> yazın.'
+      : 'Demo hesabında sahte bakiyeyle işlem yapılacak.'}</div>
+    <label style="display:flex; gap:8px; align-items:center; margin-top:12px; font-size:13px;">
+      <input type="checkbox" id="tAgree"> Özeti okudum, bu emri onaylıyorum</label>
+    ${live ? '<input type="text" id="tConfirm" placeholder="ONAYLA" autocomplete="off" style="margin-top:8px; width:100%; background:var(--panel-2); color:var(--text); border:1px solid var(--red); border-radius:6px; padding:8px 10px;">' : ''}
+    <button type="button" id="tPlaceBtn" onclick="placeTrade()" style="margin-top:12px; width:100%; background:${live ? 'var(--red)' : 'var(--green)'};">
+      ${live ? 'Gerçek emri gönder' : 'Demo emri gönder'}</button>
+    <div id="tResult"></div>`;
+  document.getElementById('tPlan').innerHTML = html;
+}
+
+function placeTrade() {
+  const agree = document.getElementById('tAgree');
+  const res = document.getElementById('tResult');
+  if (!agree.checked) { res.innerHTML = '<div class="note err">Önce özeti onaylayın.</div>'; return; }
+  const c = document.getElementById('tConfirm');
+  if (c && c.value.trim().toUpperCase() !== 'ONAYLA') { res.innerHTML = '<div class="note err">Canlı emir için ONAYLA yazın.</div>'; return; }
+  const btn = document.getElementById('tPlaceBtn');
+  btn.disabled = true; btn.textContent = 'Gönderiliyor...';
+  apiPost('/api/trade/place', { ...tradeRequest(), confirmed: true, confirm_text: c ? c.value : '' }).then(d => {
+    if (!d.ok) { btn.disabled = false; btn.textContent = 'Tekrar dene'; res.innerHTML = `<div class="note err">${d.message}</div>`; return; }
+    btn.style.display = 'none';
+    const steps = (d.result.steps || []).map(st => `<li>${st.ok ? '✓' : '✗'} ${st.name}${st.id ? ` <span class="muted">#${st.id}</span>` : ''}${st.error ? ` — <span class="down">${st.error}</span>` : ''}</li>`).join('');
+    res.innerHTML = `<div class="note ${d.result.critical ? 'err' : 'ok'}"><b>${d.result.critical ? 'Emir kısmen gerçekleşti' : 'Emir gönderildi'}</b>
+      ${d.result.avg_price ? ` · ortalama fiyat ${fmtPrice(d.result.avg_price)}` : ''}
+      <ol style="margin:6px 0 0 18px; padding:0;">${steps}</ol>
+      ${d.result.critical ? `<div style="margin-top:6px;"><b>${d.result.critical}</b></div>` : ''}
+      <div style="margin-top:6px;"><a href="/profile#orders" style="color:inherit;">Emirlerim</a> sayfasından takip edebilirsiniz.</div></div>`;
+  }).catch(() => { btn.disabled = false; btn.textContent = 'Tekrar dene'; res.innerHTML = '<div class="note err">Bağlantı hatası; emrin durumunu Binance\'ten kontrol edin.</div>'; });
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTrade(); });
 </script>
 
 </body>

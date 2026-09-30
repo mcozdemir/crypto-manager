@@ -11,6 +11,12 @@ if [[ ! -x ".venv/bin/python" ]]; then
   exit 1
 fi
 
+# requirements.txt değiştiyse eksik paketleri otomatik kur
+if [[ requirements.txt -nt .venv/.requirements-stamp ]]; then
+  echo "Gerekli paketler güncelleniyor..."
+  .venv/bin/python -m pip install -q -r requirements.txt && touch .venv/.requirements-stamp
+fi
+
 export MPLCONFIGDIR="$PROJECT_DIR/.matplotlib-cache"
 mkdir -p "$MPLCONFIGDIR"
 

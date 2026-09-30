@@ -28,3 +28,5 @@ services:
         sync: false
       - key: APP_COINGECKO_API_KEY # isteğe bağlı: ücretsiz CoinGecko "Demo" anahtarı
         sync: false
+      - key: APP_ENCRYPTION_KEY    # Binance API anahtarlarını şifreler; yereldeki .env ile AYNI olmalı
+        sync: false

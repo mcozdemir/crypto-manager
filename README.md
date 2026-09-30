@@ -117,6 +117,26 @@ Render → Environment bölümüne `APP_COINGECKO_API_KEY` olarak ekleyin.
 Kilit açılımı (token unlock) takvimi için ücretsiz bir kaynak bulunmadığından
 henüz dahil edilmedi.
 
+## Binance ile emir açma ve profil
+
+Tarama, Coin Ara ve Sinyal Günlüğü tablolarındaki **⇅ İşlem** butonu emir penceresini açar:
+güncel fiyat canlı gösterilir, piyasa (Spot / USDT-M Vadeli), giriş türü (piyasa / limit),
+yatırım tutarı, kaldıraç, marj tipi, hedef ve stop girilir; **Emir özetini gör** ile miktar,
+tahmini kâr/zarar, tasfiye fiyatı, ücret ve Binance'e gidecek emirler listelenir. Onaydan sonra
+giriş emriyle birlikte hedef ve stop emirleri de otomatik kurulur.
+
+**Profil** (sağ üstteki kullanıcı adına tıklayın): fotoğraf, kullanıcı adı, işlem varsayılanları,
+Binance API anahtarları ve **Emirlerim** listesi.
+
+- **Demo** (önerilen, sahte bakiye): [demo.binance.com](https://demo.binance.com) → Binance hesabıyla
+  giriş → API Management → Create API → anahtarları Profil → Binance API → Demo'ya yapıştırın.
+- **Canlı:** binance.com → API Management → yeni anahtar; *Enable Reading*, *Spot & Margin
+  Trading* ve *Futures* açık, **çekim (Withdrawals) kapalı**. IP kısıtlaması seçilemez (Render
+  IP'leri sabit değil); bu yüzden Binance anahtarı 90 günde bir yenilemenizi ister.
+- Sunucuda `APP_ENCRYPTION_KEY` tanımlı olmalıdır (yerel `.env` ile Render'da **aynı** değer).
+
+Tüm kurallar: [`docs/KURALLAR.md` §14](docs/KURALLAR.md#14-binance-ile-emir-açma).
+
 ## Sürümler ve karşılaştırma
 
 Her sinyal, üretildiği uygulama sürümüyle (`version.py` → `VERSION`) ve git
