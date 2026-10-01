@@ -4,9 +4,9 @@
 > Sinyal tespiti, puanlama, eleme, kayıt veya tahmin mantığını değiştiren her
 > güncellemede bu belge de aynı commit içinde güncellenir (bkz. [§16](#16-değişiklik-ve-sürüm-kuralları)).
 >
-> Son güncelleme: **v1.4.1** · 2026-09-30 · Kodla karşılaştırma: `patterns.py`, `scoring.py`,
+> Son güncelleme: **v1.5.0** · 2026-09-30 · Kodla karşılaştırma: `patterns.py`, `scoring.py`,
 > `scanner.py`, `confidence.py`, `fundamentals.py`, `market_direction.py`, `journal.py`,
-> `backtest.py`, `auth.py`, `ayarlar.py`, `binance_client.py`, `trading.py`, `profiles.py`
+> `backtest.py`, `auth.py`, `ayarlar.py`, `binance_client.py`, `binance_account.py`, `trading.py`, `profiles.py`
 
 ## İçindekiler
 
@@ -343,8 +343,39 @@ açar. Durumu HEDEF/STOP olan (kapanmış) sinyallerde buton gösterilmez.
   Binance'ten elle girmesi söylenir.
 - Emir durumları: `GÖNDERİLDİ` (giriş + koruma emirleri kuruldu), `KORUMASIZ`, `HATA`
   (hiçbir emir açılmadı). Tüm denemeler **Profil → Emirlerim**'de listelenir.
-- Uygulama pozisyonu sonradan takip etmez/kapatmaz; limit giriş dolmazsa emir Binance'te
-  bekler, iptal Binance'ten yapılır.
+- Açılan pozisyonlar **İşlemlerim** sayfasından takip edilir ve yönetilir (aşağıda). Uygulama
+  kendi başına pozisyon kapatmaz; tüm müdahaleler kullanıcı onayıyla yapılır.
+
+**İşlemlerim paneli** (`/trades`)
+
+- Seçili hesabın (Demo/Canlı, sayfadaki sekmeden değiştirilebilir) Binance verisi **10 sn'de
+  bir** yenilenir (sekme arka plandayken ve bir pencere açıkken durur; sunucu aynı kullanıcı
+  için 4 sn önbellek tutar).
+- **Vadeli:** Binance'teki **tüm** açık pozisyonlar (elle açılanlar dahil; uygulamadan
+  açılanlar "uygulama" etiketli): miktar, giriş, işaret fiyatı, anlık K/Z (USDT ve marja göre
+  %), pozisyon büyüklüğü, marj, tasfiye, başa baş, bağlı hedef/stop ve güncel fiyata uzaklığı,
+  stop–giriş–hedef çubuğu. Hedef veya stop emri olmayan pozisyon uyarıyla gösterilir.
+- **Spot:** USDT bakiyesi ve yalnızca **uygulamadan alınmış** ya da **açık emri olan**
+  varlıklar (diğerleri sayı olarak belirtilir). K/Z, uygulamanın kaydettiği alım fiyatına göre
+  hesaplanır.
+- **Bekleyen emirler:** pozisyona bağlı hedef/stop dışındaki tüm açık emirler. Pozisyonu
+  olmayan paritedeki kapatma emirleri "pozisyonsuz" olarak işaretlenir (yeni bir pozisyonu
+  beklenmedik şekilde kapatabilir).
+- **Gerçekleşen K/Z:** vadeli hesabın son 7 gündeki gerçekleşen kâr/zararı (parite bazında).
+- **Müdahaleler** (her biri onay penceresiyle; Canlı hesapta `ONAYLA` yazılır; aynı anda tek
+  işlem; hepsi `trade_actions` tablosuna kaydedilir):
+  - *Pozisyonu kapat (vadeli):* tüm miktar piyasa emriyle kapatılır (tek yönlü modda
+    `reduceOnly`, hedge modunda `positionSide`); ardından o paritedeki hedef/stop emirleri iptal
+    edilir.
+  - *Tümünü sat (spot):* paritedeki tüm açık emirler iptal edilir, serbest kalan **tüm** bakiye
+    piyasa emriyle satılır.
+  - *Emri iptal et:* tek emir; OCO'da hedef ve stop birlikte iptal edilir. Koruyucu emir
+    iptalinde uyarı gösterilir.
+  - *Hedef/Stop düzenle:* LONG için `stop < güncel fiyat < hedef`, SHORT için tersi; vadeli
+    stop tasfiye fiyatının ötesine konamaz. Binance aynı yönde ikinci "pozisyonu kapat"
+    emrine izin vermediği için **önce eski emir iptal edilir, sonra yenisi kurulur**; yenisi
+    kurulamazsa eski fiyat geri kurulur, o da olmazsa işlem **KORUMASIZ** uyarısıyla
+    bildirilir. Spot'ta hedef ve stop tek OCO olarak birlikte yenilenir.
 
 **API anahtarı kuralları**
 
@@ -383,6 +414,7 @@ açar. Durumu HEDEF/STOP olan (kapanmış) sinyallerde buton gösterilmez.
 
 | Sürüm | Tarih | Değişiklik |
 |---|---|---|
+| 1.5.0 | 2026-10-01 | İşlemlerim paneli (canlı pozisyon/emir takibi, kapat/iptal/hedef-stop düzenle); sunucu saati Türkiye |
 | 1.4.1 | 2026-09-30 | Binance hız sınırı koruması (429/418'de bekleme, spot veride yedek adres) |
 | 1.4.0 | 2026-09-30 | Binance ile emir açma (Spot + Vadeli, Demo + Canlı), emir özeti, otomatik hedef/stop; profil sayfası |
 | 1.3.1 | 2026-09-30 | CoinGecko Demo anahtarı: piyasa yönü anahtarla; temel analiz ayrıntı bütçesi 12 → 40 |
@@ -399,6 +431,8 @@ açar. Durumu HEDEF/STOP olan (kapanmış) sinyallerde buton gösterilmez.
   **sürüm karşılaştırması** ölçer.
 - Temel analiz kısa vadeli (1H) hareketlerde zayıf bir göstergedir.
 - Binance ABD IP'lerini engeller; sunucu Frankfurt'ta çalışır.
+- Kayıt saatleri Türkiye saatidir (Render `TZ=Europe/Istanbul`). v1.5.0 öncesinde Render'da
+  kaydedilen sinyallerin saati UTC'dir (3 saat geride görünür).
 - **Binance hız sınırı:** dakikalık istek ağırlığı aşılırsa Binance 429, ısrar edilirse 418
   (IP yasağı, 2 dk – 3 gün) döner. Render'ın çıkış IP'si başka uygulamalarla paylaşıldığı
   için başkalarının trafiği de bu sınırı tüketebilir. Uygulama 429/418 alınca o adrese

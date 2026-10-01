@@ -301,6 +301,7 @@
     <button id="scanBtn" onclick="startScan()">Taramayı Başlat</button>
     <button id="exportBtn" onclick="exportExcel()" disabled>⬇ Excel'e İndir</button>
     {% if current_user %}
+    <a href="/trades" class="user-chip" title="Binance'teki pozisyonlarım ve emirlerim" style="padding:6px 12px;">📈 İşlemlerim</a>
     <a href="/profile" class="user-chip" title="Profil ve ayarlar">
       <img src="{{ current_avatar or '' }}" alt="" onerror="this.style.display='none'">
       <span>{{ current_user }}</span>
@@ -1414,7 +1415,7 @@ function placeTrade() {
       ${d.result.avg_price ? ` · ortalama fiyat ${fmtPrice(d.result.avg_price)}` : ''}
       <ol style="margin:6px 0 0 18px; padding:0;">${steps}</ol>
       ${d.result.critical ? `<div style="margin-top:6px;"><b>${d.result.critical}</b></div>` : ''}
-      <div style="margin-top:6px;"><a href="/profile#orders" style="color:inherit;">Emirlerim</a> sayfasından takip edebilirsiniz.</div></div>`;
+      <div style="margin-top:6px;"><a href="/trades" style="color:inherit; font-weight:700;">📈 İşlemlerim</a> sayfasından canlı takip edebilirsiniz.</div></div>`;
   }).catch(() => { btn.disabled = false; btn.textContent = 'Tekrar dene'; res.innerHTML = '<div class="note err">Bağlantı hatası; emrin durumunu Binance\'ten kontrol edin.</div>'; });
 }
 

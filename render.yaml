@@ -20,6 +20,8 @@ services:
         value: crypto-manager
       - key: MPLCONFIGDIR
         value: /tmp/matplotlib
+      - key: TZ                    # kayıt saatleri Türkiye saatiyle (Mac ile aynı)
+        value: Europe/Istanbul
       - key: APP_SECRET_KEY        # oturum çerezlerini imzalar; Render otomatik üretir
         generateValue: true
       - key: APP_TURSO_TECH_DB_URL # Render panelinde sizden istenir

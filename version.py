@@ -17,10 +17,12 @@ import os
 import subprocess
 from functools import lru_cache
 
-VERSION = "1.4.1"
+VERSION = "1.5.0"
 
 # (sürüm, tarih, açıklama) — en yeni en üstte
 CHANGELOG = [
+    ("1.5.0", "2026-10-01", "İşlemlerim paneli: Binance pozisyon/emirlerinin canlı takibi, pozisyon kapatma, "
+                            "emir iptali, hedef/stop düzenleme. Sunucu saati Türkiye saatine sabitlendi."),
     ("1.4.1", "2026-09-30", "Binance hız sınırı koruması: 429/418 alınınca istekler Retry-After süresince "
                             "durdurulur, spot veride data-api.binance.vision yedeğine geçilir."),
     ("1.4.0", "2026-09-30", "Binance ile emir açma (Spot + USDT-M Vadeli, Demo + Canlı), emir özeti ve "

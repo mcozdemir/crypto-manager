@@ -125,6 +125,11 @@ yatırım tutarı, kaldıraç, marj tipi, hedef ve stop girilir; **Emir özetini
 tahmini kâr/zarar, tasfiye fiyatı, ücret ve Binance'e gidecek emirler listelenir. Onaydan sonra
 giriş emriyle birlikte hedef ve stop emirleri de otomatik kurulur.
 
+**İşlemlerim** (sağ üstte `📈 İşlemlerim`): Binance'teki açık vadeli pozisyonlar ve spot varlıklar
+canlı (10 sn) izlenir: anlık kâr/zarar, tasfiye, hedef/stop ve uzaklıkları, bekleyen emirler,
+son 7 günün gerçekleşen K/Z'si. Buradan pozisyon kapatılabilir, emir iptal edilebilir ve hedef/stop
+değiştirilebilir (onaylı; canlıda `ONAYLA`).
+
 **Profil** (sağ üstteki kullanıcı adına tıklayın): fotoğraf, kullanıcı adı, işlem varsayılanları,
 Binance API anahtarları ve **Emirlerim** listesi.
 

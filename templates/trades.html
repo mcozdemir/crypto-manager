@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>İşlemlerim · Kripto Formasyon Tarayıcı</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel-2: #1e2230; --border: #2a2f3f;
+    --text: #e6e8ef; --muted: #8b93a7; --green: #26a69a; --red: #ef5350;
+    --blue: #4f8ef7; --amber: #f5a623;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 14px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  header a:hover { color: var(--text); }
+  header h1 { font-size: 18px; margin: 0; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 16px 60px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  section { min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  section h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  section h2 .count { color: var(--muted); font-weight: 400; font-size: 13px; }
+  .muted { color: var(--muted); }
+  .up { color: var(--green); } .down { color: var(--red); } .mid { color: var(--amber); }
+  button { background: var(--blue); color: #fff; border: 0; border-radius: 7px; padding: 7px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  button.secondary { background: var(--panel-2); border: 1px solid var(--border); color: var(--text); }
+  button.danger { background: transparent; border: 1px solid var(--red); color: var(--red); }
+  button.small { padding: 4px 9px; font-size: 12px; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  input { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; font-size: 14px; width: 100%; }
+  input:focus { outline: none; border-color: var(--blue); }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  .tabs { display: flex; gap: 6px; }
+  .tabs button { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+  .tabs button.on { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .tabs button.on.live { background: var(--red); border-color: var(--red); }
+  .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .badge.long { background: rgba(38,166,154,0.15); color: var(--green); }
+  .badge.short { background: rgba(239,83,80,0.15); color: var(--red); }
+  .badge.gray { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+  .badge.app { background: rgba(79,142,247,0.18); color: var(--blue); }
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+  .stat .v { font-size: 20px; font-weight: 700; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .stat .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .card .top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card .sym { font-size: 16px; font-weight: 700; }
+  .card .pnl { margin-left: auto; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .card .pnl small { display: block; font-weight: 500; font-size: 12px; }
+  .kv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; margin-top: 10px; font-size: 12px; }
+  .kv div span { display: block; color: var(--muted); font-size: 11px; }
+  .kv div b { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .bar { position: relative; height: 6px; background: var(--border); border-radius: 3px; margin: 14px 0 4px; }
+  .bar .fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; }
+  .bar .dot { position: absolute; top: -4px; width: 14px; height: 14px; border-radius: 50%; background: var(--text); border: 2px solid var(--panel-2); transform: translateX(-50%); }
+  .bar-labels { display: flex; justify-content: space-between; font-size: 11px; }
+  .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; padding: 7px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 7px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; }
+  .note { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-top: 10px; line-height: 1.55; }
+  .note.warn { background: rgba(245,166,35,0.12); color: var(--amber); border: 1px solid rgba(245,166,35,0.3); }
+  .note.err { background: rgba(239,83,80,0.1); color: var(--red); border: 1px solid rgba(239,83,80,0.35); }
+  .note.ok { background: rgba(38,166,154,0.1); color: var(--green); border: 1px solid rgba(38,166,154,0.35); }
+  .note.plain { background: var(--panel-2); border: 1px solid var(--border); }
+  .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 6px; }
+  .live-dot.off { background: var(--muted); }
+  .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 900; display: none; align-items: flex-start;
+    justify-content: center; overflow-y: auto; padding: 40px 12px; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 460px; padding: 18px 20px; }
+  .modal h3 { margin: 0 0 10px; font-size: 17px; display: flex; gap: 8px; align-items: center; }
+  .modal .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 8px;
+    font-size: 13px; display: none; z-index: 1000; max-width: calc(100vw - 32px); color: #fff; }
+  @media (max-width: 560px) {
+    header { padding: 12px 16px; }
+    section { padding: 14px 12px; }
+    .cards { grid-template-columns: 1fr; }
+    .kv { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <a href="/">← Panele dön</a>
+  <h1>📈 İşlemlerim</h1>
+  <div class="tabs" id="envTabs"></div>
+  <span class="muted" style="font-size:12px; margin-left:auto;"><span class="live-dot" id="liveDot"></span><span id="updated">Yükleniyor...</span></span>
+  <button class="secondary small" onclick="load(true)">Yenile</button>
+  <a href="/profile">👤 Profil</a>
+</header>
+
+<main id="main">
+  <div class="empty">Yükleniyor...</div>
+</main>
+
+<div class="modal-back" id="mBack" onclick="if (event.target === this) closeModal()">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3 id="mTitle"></h3>
+    <div id="mBody"></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+const REFRESH_MS = 10000;
+let S = null;            // son anlık görüntü
+let ENV = new URLSearchParams(location.search).get('env') || '';
+let timer = null, busy = false;
+const ITEMS = {};        // buton -> veri eşlemesi
+
+function api(url, method, body) {
+  const opts = { method: method || 'GET', headers: { 'X-CM-Request': '1' } };
+  if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  return fetch(url, opts).then(r => {
+    if (r.status === 401) { location.href = '/login?next=/trades'; }
+    return r.json().catch(() => ({ ok: false, message: 'Sunucu yanıtı okunamadı.' }));
+  });
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function num(v, d) {
+  const n = Number(v);
+  if (v === null || v === undefined || v === '' || !isFinite(n)) return '–';
+  const digits = d !== undefined ? d : (Math.abs(n) >= 1000 ? 2 : Math.abs(n) >= 1 ? 4 : 8);
+  return n.toLocaleString('tr-TR', { maximumFractionDigits: digits });
+}
+function money(v) { return v === null || v === undefined ? '–' : `${num(v, 2)} USDT`; }
+function signed(v, suffix) {
+  const n = Number(v);
+  if (!isFinite(n)) return '–';
+  return `<span class="${n > 0 ? 'up' : n < 0 ? 'down' : ''}">${n > 0 ? '+' : ''}${num(n, 2)}${suffix || ''}</span>`;
+}
+function pct(v) {
+  if (v === null || v === undefined || !isFinite(Number(v))) return '';
+  const n = Number(v);
+  return (n > 0 ? '+' : n < 0 ? '-' : '') + '%' + Math.abs(n).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+}
+function when(ms) {
+  if (!ms) return '–';
+  const d = new Date(typeof ms === 'number' ? ms : String(ms).replace(' ', 'T'));
+  return d.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+function toast(msg, ok) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.background = ok ? 'var(--green)' : 'var(--red)'; t.style.display = 'block';
+  clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 4500);
+}
+let itemSeq = 0;
+function reg(obj) { const id = 'i' + (++itemSeq); ITEMS[id] = obj; return id; }
+
+// ------------------------------------------------------------------ yükleme
+function load(force) {
+  if (busy) return;
+  busy = true;
+  const q = new URLSearchParams();
+  if (ENV) q.set('env', ENV);
+  if (force) q.set('force', '1');
+  api('/api/trades/snapshot?' + q.toString()).then(d => {
+    busy = false;
+    document.getElementById('liveDot').classList.toggle('off', !d.ok);
+    if (!d.ok) { document.getElementById('main').innerHTML = `<div class="note err">${esc(d.message || 'Veri alınamadı.')}</div>`; return; }
+    S = d; ENV = d.env;
+    renderTabs();
+    render();
+    document.getElementById('updated').textContent = 'Son güncelleme ' + new Date(d.ts * 1000).toLocaleTimeString('tr-TR');
+  }).catch(() => { busy = false; document.getElementById('liveDot').classList.add('off'); });
+}
+
+function renderTabs() {
+  const has = S.envs_with_key || [];
+  const envs = [['demo', 'Demo'], ['live', 'Canlı']];
+  document.getElementById('envTabs').innerHTML = envs.map(([e, l]) =>
+    `<button class="${e === ENV ? 'on' : ''} ${e}" onclick="switchEnv('${e}')" ${has.includes(e) || e === ENV ? '' : 'title="Bu hesap için anahtar yok"'}>${l}</button>`).join('');
+}
+function switchEnv(e) {
+  ENV = e; history.replaceState(null, '', '?env=' + e);
+  document.getElementById('main').innerHTML = '<div class="empty">Yükleniyor...</div>';
+  load(true);
+}
+
+function startTimer() {
+  clearInterval(timer);
+  timer = setInterval(() => { if (!document.hidden && !modalOpen()) load(false); }, REFRESH_MS);
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
+
+// ------------------------------------------------------------------ çizim
+function render() {
+  for (const k in ITEMS) delete ITEMS[k];
+  const m = document.getElementById('main');
+  if (!S.has_key) {
+    m.innerHTML = `<section><div class="note warn">${esc(S.env_label)} için Binance API anahtarınız yok.
+      <a href="/profile#binance" style="color:inherit; font-weight:700;">Profil → Binance API</a> bölümünden ekleyin.</div></section>`;
+    return;
+  }
+  const f = S.futures || {}, s = S.spot || {};
+  let html = summaryHtml(f, s);
+  html += `<section><h2>Vadeli pozisyonlar <span class="count">${f.ok ? (f.positions.length + ' açık') : ''}</span></h2>${futuresHtml(f)}</section>`;
+  html += `<section><h2>Spot varlıklar <span class="count">${s.ok ? (s.holdings.length + ' takipte') : ''}</span></h2>${spotHtml(s)}</section>`;
+  html += `<section><h2>Bekleyen emirler <span class="count">${ordersCount(f, s)}</span></h2>${ordersHtml(f, s)}</section>`;
+  html += `<section><h2>Gerçekleşen kâr/zarar <span class="count">vadeli, son ${f.realized ? f.realized.days : 7} gün</span></h2>${realizedHtml(f)}</section>`;
+  html += `<section><h2>Bu uygulamadan yapılanlar</h2>${historyHtml()}</section>`;
+  m.innerHTML = html;
+}
+
+function summaryHtml(f, s) {
+  const live = ENV === 'live';
+  const stat = (k, v, sub) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`;
+  let h = '<div class="summary">';
+  h += stat('Hesap', `<span class="${live ? 'down' : ''}">${live ? 'CANLI' : 'DEMO'}</span>`, live ? 'gerçek para' : 'sahte bakiye');
+  if (f.ok) {
+    h += stat('Vadeli bakiye', money(f.balance), `kullanılabilir ${money(f.available)}`);
+    h += stat('Anlık kâr/zarar', signed(f.unrealized, ' USDT'), `${f.positions.length} açık pozisyon`);
+  }
+  if (s.ok) h += stat('Spot USDT', money(s.usdt), `${s.holdings.length} varlık takipte`);
+  if (f.ok && f.realized) h += stat(`Gerçekleşen (${f.realized.days} gün)`, signed(f.realized.total, ' USDT'), 'vadeli');
+  h += '</div>';
+  return h;
+}
+
+function progressBar(direction, entry, mark, tp, sl) {
+  if (!tp || !sl) return '';
+  const t = Number(tp.trigger), st = Number(sl.trigger), m = Number(mark), e = Number(entry);
+  const long = direction === 'LONG';
+  const span = long ? t - st : st - t;
+  if (!(span > 0)) return '';
+  const pos = Math.max(0, Math.min(1, (long ? m - st : st - m) / span));
+  const ent = Math.max(0, Math.min(1, (long ? e - st : st - e) / span));
+  const color = pos >= ent ? 'var(--green)' : 'var(--red)';
+  return `<div class="bar" title="Stop → Hedef arasında fiyatın konumu">
+      <div class="fill" style="left:${Math.min(pos, ent) * 100}%; width:${Math.abs(pos - ent) * 100}%; background:${color};"></div>
+      <div class="dot" style="left:${ent * 100}%; width:4px; height:14px; border-radius:2px; background:var(--muted);" title="Giriş"></div>
+      <div class="dot" style="left:${pos * 100}%;" title="Güncel"></div></div>
+    <div class="bar-labels"><span class="down">Stop ${num(sl.trigger)}</span><span class="muted">giriş ${num(entry)}</span><span class="up">Hedef ${num(tp.trigger)}</span></div>`;
+}
+
+function level(x) {
+  if (!x) return '<b class="mid">yok</b>';
+  return `<b>${num(x.trigger)}</b> <span class="muted">${x.distance_pct !== null && x.distance_pct !== undefined ? '(' + pct(x.distance_pct) + ')' : ''}</span>`;
+}
+
+function futuresHtml(f) {
+  if (!f.ok) return `<div class="note err">${esc(f.message || 'Vadeli hesap okunamadı.')}</div>`;
+  if (!f.positions.length) return '<div class="empty">Açık vadeli pozisyon yok.</div>';
+  return '<div class="cards">' + f.positions.map(p => {
+    const id = reg({ market: 'futures', ...p });
+    const app = appMatch('futures', p.symbol, p.direction);
+    const missing = !p.tp && !p.sl ? 'Hedef ve stop emri yok — pozisyon korumasız.' : !p.sl ? 'Zarar kes (stop) emri yok.' : !p.tp ? 'Kâr al (hedef) emri yok.' : '';
+    const warn = missing ? `<div class="note warn" style="margin-top:8px;">⚠ ${missing}</div>` : '';
+    return `<div class="card">
+      <div class="top"><span class="sym">${esc(p.symbol)}</span>
+        <span class="badge ${p.direction === 'LONG' ? 'long' : 'short'}">${p.direction}</span>
+        <span class="badge gray">${p.leverage ? p.leverage + 'x' : ''} ${esc(p.margin_type || '')}</span>
+        ${app ? '<span class="badge app" title="Bu uygulamadan açıldı">uygulama</span>' : ''}
+        <div class="pnl">${signed(p.pnl, ' USDT')}<small>${p.pnl_pct !== null ? signed(p.pnl_pct, '%') + ' marja göre' : ''}</small></div></div>
+      ${progressBar(p.direction, p.entry_price, p.mark_price, p.tp, p.sl)}
+      <div class="kv">
+        <div><span>Miktar</span><b>${num(p.quantity)}</b></div>
+        <div><span>Giriş</span><b>${num(p.entry_price)}</b></div>
+        <div><span>İşaret fiyatı</span><b>${num(p.mark_price)}</b> <span class="muted">${p.move_pct !== null ? pct(p.move_pct) : ''}</span></div>
+        <div><span>Pozisyon</span><b>${money(p.notional)}</b></div>
+        <div><span>Marj</span><b>${money(p.margin)}</b></div>
+        <div><span>Tasfiye</span><b class="mid">${num(p.liquidation)}</b></div>
+        <div><span>Hedef (kâr al)</span>${level(p.tp)}</div>
+        <div><span>Stop (zarar kes)</span>${level(p.sl)}</div>
+        <div><span>Başa baş</span><b>${num(p.break_even)}</b></div>
+      </div>${warn}
+      <div class="actions">
+        <button class="secondary small" onclick="openTpsl('${id}')">Hedef/Stop düzenle</button>
+        <button class="danger small" onclick="openClose('${id}')">Pozisyonu kapat</button>
+      </div></div>`;
+  }).join('') + '</div>';
+}
+
+function spotHtml(s) {
+  if (!s.ok) return `<div class="note err">${esc(s.message || 'Spot hesap okunamadı.')}</div>`;
+  let h = '';
+  if (!s.holdings.length) h += '<div class="empty">Uygulamadan alınmış ya da açık emri olan spot varlık yok.</div>';
+  else h += '<div class="cards">' + s.holdings.map(x => {
+    const id = reg({ market: 'spot', direction: 'LONG', ...x });
+    return `<div class="card">
+      <div class="top"><span class="sym">${esc(x.symbol)}</span><span class="badge long">SPOT</span>
+        <div class="pnl">${x.pnl !== null ? signed(x.pnl, ' USDT') : '<span class="muted">–</span>'}<small>${x.pnl_pct !== null ? signed(x.pnl_pct, '%') : 'giriş kaydı yok'}</small></div></div>
+      ${progressBar('LONG', x.entry_price || x.price, x.price, x.tp, x.sl)}
+      <div class="kv">
+        <div><span>Miktar</span><b>${num(x.quantity)} ${esc(x.asset)}</b></div>
+        <div><span>Giriş (uygulama)</span><b>${num(x.entry_price)}</b></div>
+        <div><span>Güncel fiyat</span><b>${num(x.price)}</b></div>
+        <div><span>Değer</span><b>${money(x.value)}</b></div>
+        <div><span>Hedef</span>${level(x.tp)}</div>
+        <div><span>Stop</span>${level(x.sl)}</div>
+      </div>
+      ${!x.sl ? '<div class="note warn" style="margin-top:8px;">⚠ Bu varlık için stop emri yok.</div>' : ''}
+      <div class="actions">
+        ${x.tp && x.sl ? `<button class="secondary small" onclick="openTpsl('${id}')">Hedef/Stop düzenle</button>` : ''}
+        <button class="danger small" onclick="openClose('${id}')">Tümünü sat</button>
+      </div></div>`;
+  }).join('') + '</div>';
+  if (s.other_assets) h += `<div class="muted" style="font-size:12px; margin-top:8px;">Hesapta uygulama dışında ${s.other_assets} varlık daha var (gösterilmiyor).</div>`;
+  return h;
+}
+
+function ordersCount(f, s) {
+  const n = (f.ok ? f.orders.length : 0) + (s.ok ? s.orders.length : 0);
+  return n ? n + ' emir' : '';
+}
+
+const TYPE_TR = {
+  LIMIT: 'Limit', MARKET: 'Piyasa', STOP_MARKET: 'Zarar kes', TAKE_PROFIT_MARKET: 'Kâr al', STOP: 'Stop limit',
+  TAKE_PROFIT: 'Kâr al limit', LIMIT_MAKER: 'Hedef (limit)', STOP_LOSS_LIMIT: 'Stop limit', TRAILING_STOP_MARKET: 'İz süren stop',
+};
+
+function ordersHtml(f, s) {
+  const rows = [];
+  if (f.ok) f.orders.forEach(o => rows.push({ market: 'futures', ...o }));
+  if (s.ok) s.orders.forEach(o => rows.push({ market: 'spot', ...o }));
+  if (!rows.length) return '<div class="empty">Bekleyen emir yok.</div>';
+  return `<div class="scroll"><table><thead><tr><th>Tarih</th><th>Parite</th><th>Piyasa</th><th>Tür</th><th>Yön</th><th>Fiyat / Tetik</th><th>Miktar</th><th></th></tr></thead><tbody>` +
+    rows.map(o => {
+      const id = reg(o);
+      return `<tr>
+        <td>${when(o.time)}</td><td><b>${esc(o.symbol)}</b>${o.orphan ? ' <span class="badge gray" title="Bu paritede açık pozisyon yok; emir yeni bir pozisyonu kapatabilir">pozisyonsuz</span>' : ''}</td>
+        <td>${o.market === 'spot' ? 'Spot' : 'Vadeli'}</td>
+        <td>${esc(TYPE_TR[o.type] || o.type)}${o.kind === 'list' ? ' <span class="muted">(OCO)</span>' : ''}</td>
+        <td class="${o.side === 'BUY' ? 'up' : 'down'}">${o.side === 'BUY' ? 'Alış' : 'Satış'}</td>
+        <td>${o.trigger ? 'tetik ' + num(o.trigger) : ''}${o.trigger && Number(o.price) ? ' / ' : ''}${Number(o.price) ? num(o.price) : ''}</td>
+        <td>${o.close_position ? 'tüm pozisyon' : num(o.quantity)}</td>
+        <td><button class="danger small" onclick="openCancel('${id}')">İptal</button></td></tr>`;
+    }).join('') + '</tbody></table></div>';
+}
+
+function realizedHtml(f) {
+  if (!f.ok) return '<div class="empty">–</div>';
+  const r = f.realized;
+  if (!r) return '<div class="empty">Alınamadı.</div>';
+  if (!r.items.length) return '<div class="empty">Bu dönemde kapanmış vadeli işlem yok.</div>';
+  return `<div class="scroll"><table><thead><tr><th>Parite</th><th>Toplam</th></tr></thead><tbody>` +
+    r.by_symbol.map(x => `<tr><td><b>${esc(x.symbol)}</b></td><td>${signed(x.income, ' USDT')}</td></tr>`).join('') +
+    `<tr><td><b>Toplam</b></td><td><b>${signed(r.total, ' USDT')}</b></td></tr></tbody></table></div>`;
+}
+
+function historyHtml() {
+  const st = { 'GÖNDERİLDİ': '<span class="up">✓ açıldı</span>', 'KORUMASIZ': '<span class="mid">⚠ korumasız</span>', 'HATA': '<span class="down">✗ hata</span>' };
+  const act = { 'KAPAT': 'Pozisyon kapatıldı', 'İPTAL': 'Emir iptal', 'HEDEF-STOP': 'Hedef/stop değişti' };
+  const rows = [];
+  (S.app_orders || []).forEach(o => rows.push({ t: o.created_at, sym: o.symbol, what: `${o.direction} ${o.market === 'spot' ? 'Spot' : 'Vadeli ' + o.leverage + 'x'} · ${num(o.amount_usdt, 2)} USDT · hedef ${num(o.target)} / stop ${num(o.stop)}`, st: st[o.status] || esc(o.status) }));
+  (S.actions || []).forEach(a => rows.push({ t: a.created_at, sym: a.symbol, what: act[a.action] || a.action, st: a.ok ? '<span class="up">✓</span>' : `<span class="down" title="${esc(a.error || '')}">✗ ${esc((a.error || '').slice(0, 60))}</span>` }));
+  rows.sort((a, b) => String(b.t).localeCompare(String(a.t)));
+  if (!rows.length) return '<div class="empty">Henüz kayıt yok.</div>';
+  return `<div class="scroll"><table><thead><tr><th>Tarih</th><th>Parite</th><th>İşlem</th><th>Durum</th></tr></thead><tbody>` +
+    rows.slice(0, 25).map(r => `<tr><td>${when(r.t)}</td><td><b>${esc(r.sym)}</b></td><td>${r.what}</td><td>${r.st}</td></tr>`).join('') + '</tbody></table></div>';
+}
+
+function appMatch(market, symbol, direction) {
+  return (S.app_orders || []).some(o => o.market === market && o.symbol === symbol && o.direction === direction && o.status !== 'HATA');
+}
+
+// ------------------------------------------------------------------ müdahale pencereleri
+let M = null;
+function modalOpen() { return document.getElementById('mBack').style.display === 'flex'; }
+function closeModal() { document.getElementById('mBack').style.display = 'none'; M = null; }
+function showModal(title, body) {
+  document.getElementById('mTitle').innerHTML = title;
+  document.getElementById('mBody').innerHTML = body;
+  document.getElementById('mBack').style.display = 'flex';
+}
+function confirmBlock(label, danger) {
+  const live = ENV === 'live';
+  return `${live ? '<div class="note err"><b>CANLI hesap:</b> gerçek para ile işlem yapılacak. Onaylamak için aşağıya <b>ONAYLA</b> yazın.</div><input id="mConfirm" placeholder="ONAYLA" autocomplete="off" style="margin-top:8px; border-color:var(--red);">' : ''}
+    <div class="actions"><button class="${danger ? 'danger' : ''}" id="mGo" onclick="submitModal()" style="${danger ? 'background:var(--red); color:#fff;' : ''}">${label}</button>
+    <button class="secondary" onclick="closeModal()">Vazgeç</button></div><div id="mResult"></div>`;
+}
+
+function openClose(id) {
+  const p = ITEMS[id]; if (!p) return;
+  M = { type: 'close', item: p };
+  const fut = p.market === 'futures';
+  showModal(`${esc(p.symbol)} <span class="badge ${fut ? (p.direction === 'LONG' ? 'long' : 'short') : 'long'}">${fut ? p.direction : 'SPOT'}</span>`,
+    `<div class="note plain">${fut
+      ? `<b>${num(p.quantity)}</b> adetlik pozisyon <b>piyasa fiyatından</b> kapatılacak (işaret fiyatı ${num(p.mark_price)}).
+         Anlık kâr/zarar: ${signed(p.pnl, ' USDT')}. Bu paritedeki hedef/stop emirleri de iptal edilir.`
+      : `Hesaptaki <b>tüm ${esc(p.asset)}</b> bakiyesi (${num(p.quantity)}) <b>piyasa fiyatından</b> satılacak (≈ ${money(p.value)}).
+         Önce bu paritedeki tüm açık emirler (hedef/stop dahil) iptal edilir.`}</div>
+     <div class="muted" style="font-size:12px; margin-top:8px;">Piyasa emri anlık fiyattan dolar; oynak piyasada fiyat biraz farklı gerçekleşebilir.</div>
+     ${confirmBlock(fut ? 'Pozisyonu kapat' : 'Tümünü sat', true)}`);
+}
+
+function openCancel(id) {
+  const o = ITEMS[id]; if (!o) return;
+  M = { type: 'cancel', item: o };
+  const protective = ['STOP_MARKET', 'STOP', 'STOP_LOSS_LIMIT', 'LIMIT_MAKER', 'TAKE_PROFIT_MARKET'].includes(o.type);
+  showModal(`Emri iptal et · ${esc(o.symbol)}`,
+    `<div class="note plain">${esc(TYPE_TR[o.type] || o.type)} · ${o.side === 'BUY' ? 'Alış' : 'Satış'} ·
+      ${o.trigger ? 'tetik ' + num(o.trigger) : num(o.price)}${o.kind === 'list' ? '<br>Bu bir OCO emri: hedef ve stop birlikte iptal edilir.' : ''}</div>
+     ${protective && !o.orphan ? '<div class="note warn">Bu emir pozisyonunuzu koruyor olabilir; iptal edilirse pozisyon o yönde korumasız kalır.</div>' : ''}
+     ${confirmBlock('Emri iptal et', true)}`);
+}
+
+function openTpsl(id) {
+  const p = ITEMS[id]; if (!p) return;
+  M = { type: 'tpsl', item: p };
+  const ref = p.market === 'futures' ? p.mark_price : p.price;
+  showModal(`Hedef / Stop · ${esc(p.symbol)} <span class="badge ${p.direction === 'LONG' ? 'long' : 'short'}">${p.market === 'futures' ? p.direction : 'SPOT'}</span>`,
+    `<div class="muted" style="font-size:13px;">Güncel ${p.market === 'futures' ? 'işaret ' : ''}fiyat: <b>${num(ref)}</b> · giriş ${num(p.entry_price)}</div>
+     <div class="grid2">
+       <div><label>Hedef (kâr al)</label><input id="mTp" type="number" step="any" value="${p.tp ? p.tp.trigger : ''}"></div>
+       <div><label>Stop (zarar kes)</label><input id="mSl" type="number" step="any" value="${p.sl ? p.sl.trigger : ''}"></div>
+     </div>
+     <div class="muted" style="font-size:12px; margin-top:8px;">${p.direction === 'LONG' ? 'LONG: stop < güncel fiyat < hedef' : 'SHORT: hedef < güncel fiyat < stop'}.
+       Eski emir iptal edilip yenisi kurulur; yenisi kurulamazsa eski fiyat geri kurulur.${p.market === 'spot' ? ' Spot\'ta hedef ve stop tek OCO emri olarak birlikte yenilenir.' : ' Boş bıraktığınız alan değişmez.'}</div>
+     ${confirmBlock('Kaydet', false)}`);
+}
+
+function submitModal() {
+  if (!M) return;
+  const it = M.item;
+  const body = { env: ENV, market: it.market, symbol: it.symbol, confirmed: true,
+                 confirm_text: (document.getElementById('mConfirm') || {}).value || '' };
+  let url;
+  if (M.type === 'close') { url = '/api/trades/close'; body.position_side = it.position_side || 'BOTH'; }
+  if (M.type === 'cancel') { url = '/api/trades/cancel'; body.kind = it.kind; body.id = it.id; }
+  if (M.type === 'tpsl') {
+    url = '/api/trades/tpsl'; body.position_side = it.position_side || 'BOTH';
+    const tp = document.getElementById('mTp').value.trim(), sl = document.getElementById('mSl').value.trim();
+    const same = (a, b) => b && a !== '' && Number(a) === Number(b.trigger);
+    body.target = tp === '' || same(tp, it.tp) ? null : tp;
+    body.stop = sl === '' || same(sl, it.sl) ? null : sl;
+    if (it.market === 'spot') { body.target = tp || null; body.stop = sl || null; }
+    if (body.target === null && body.stop === null) { document.getElementById('mResult').innerHTML = '<div class="note warn">Değişiklik yok.</div>'; return; }
+  }
+  const btn = document.getElementById('mGo');
+  btn.disabled = true; btn.textContent = 'Gönderiliyor...';
+  api(url, 'POST', body).then(d => {
+    const res = document.getElementById('mResult');
+    const steps = ((d.result || {}).steps || []).map(s => `<li>${s.ok ? '✓' : '✗'} ${esc(s.name)}${s.error ? ' — ' + esc(s.error) : ''}${s.note ? ' (' + esc(s.note) + ')' : ''}</li>`).join('');
+    if (d.ok) {
+      res.innerHTML = `<div class="note ok"><b>Tamamlandı.</b>${steps ? `<ol>${steps}</ol>` : ''}</div>`;
+      toast('İşlem tamamlandı', true);
+      setTimeout(() => { closeModal(); load(true); }, 1400);
+    } else {
+      res.innerHTML = `<div class="note err"><b>${esc(d.message || 'İşlem tamamlanamadı.')}</b>${steps ? `<ol>${steps}</ol>` : ''}</div>`;
+      btn.disabled = false; btn.textContent = 'Tekrar dene';
+      load(true);
+    }
+  });
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalOpen()) closeModal(); });
+
+load(true);
+startTimer();
+</script>
+</body>
+</html>

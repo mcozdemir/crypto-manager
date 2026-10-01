@@ -215,3 +215,202 @@ def api_orders(user):
         FROM trade_orders WHERE user_id = ? ORDER BY id DESC LIMIT 100
     """, (user["id"],))
     return jsonify({"ok": True, "orders": rows})
+
+
+# --------------------------------------------------------------------------
+# İşlemlerim paneli: canlı pozisyonlar, emirler, müdahale
+# --------------------------------------------------------------------------
+import binance_account  # noqa: E402
+from decimal import Decimal  # noqa: E402
+from flask import render_template  # noqa: E402
+
+_snap_cache: Dict[tuple, tuple] = {}
+SNAPSHOT_TTL_SEC = 4
+_actions_ready = False
+
+
+def _init_actions():
+    global _actions_ready
+    if _actions_ready:
+        return
+    get_db().execute_many([
+        ("""CREATE TABLE IF NOT EXISTS trade_actions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                username TEXT,
+                env TEXT NOT NULL,
+                market TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                action TEXT NOT NULL,
+                detail_json TEXT,
+                ok INTEGER,
+                error TEXT,
+                app_version TEXT
+            )""", ()),
+        ("CREATE INDEX IF NOT EXISTS idx_trade_actions_user ON trade_actions (user_id, created_at)", ()),
+    ])
+    _actions_ready = True
+
+
+def _record_action(user, env, market, symbol, action, detail, ok, error=None):
+    try:
+        _init_actions()
+        get_db().execute("""
+            INSERT INTO trade_actions (created_at, user_id, username, env, market, symbol, action,
+                                       detail_json, ok, error, app_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (datetime.now().isoformat(timespec="seconds"), user["id"], user["username"], env, market,
+              symbol, action, json.dumps(detail, default=str)[:20000], 1 if ok else 0, error, VERSION))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("İşlem kaydı yazılamadı: %s", exc)
+
+
+def _env_for(user, requested):
+    s = profiles.get_settings(user["id"])
+    env = requested if requested in ("demo", "live") else s["trade_env"]
+    return env
+
+
+def _client_or_error(user, env):
+    client = profiles.get_client(user["id"], env)
+    if client is None:
+        raise binance_client.PlanError(
+            f"{binance_client.ENV_LABEL[env]} için Binance API anahtarınız yok. Profil → Binance API "
+            "bölümünden ekleyin.")
+    return client
+
+
+def _app_spot_entries(user_id: int, env: str) -> Dict[str, Decimal]:
+    rows = get_db().execute("""
+        SELECT symbol, avg_price, entry_price FROM trade_orders
+        WHERE user_id = ? AND env = ? AND market = 'spot' AND status != 'HATA'
+        ORDER BY id ASC
+    """, (user_id, env))
+    out = {}
+    for r in rows:
+        price = r["avg_price"] or r["entry_price"]
+        try:
+            out[r["symbol"]] = binance_client.D(price)
+        except Exception:  # noqa: BLE001
+            continue
+    return out
+
+
+@bp.route("/trades")
+def trades_page():
+    return render_template("trades.html")
+
+
+@bp.route("/api/trades/snapshot")
+@_guard
+def api_snapshot(user):
+    env = _env_for(user, request.args.get("env"))
+    keys = profiles.key_status(user["id"])
+    base = {"env": env, "env_label": binance_client.ENV_LABEL[env],
+            "envs_with_key": sorted(keys.keys()), "ts": int(time.time())}
+    if env not in keys:
+        return jsonify({**base, "ok": True, "has_key": False})
+    force = request.args.get("force") == "1"
+    ck = (user["id"], env)
+    hit = _snap_cache.get(ck)
+    if hit and not force and time.time() - hit[0] < SNAPSHOT_TTL_SEC:
+        return jsonify({**hit[1], "ts": int(hit[0]), "cached": True})
+    try:
+        client = _client_or_error(user, env)
+    except (binance_client.PlanError, secretbox.SecretBoxError) as exc:
+        return jsonify({**base, "ok": False, "message": str(exc)}), 400
+    out = {**base, "ok": True, "has_key": True}
+    try:
+        out["futures"] = binance_account.futures_snapshot(client, user["id"])
+    except Exception as exc:  # noqa: BLE001
+        out["futures"] = {"ok": False, "message": str(exc)}
+    try:
+        out["spot"] = binance_account.spot_snapshot(client, _app_spot_entries(user["id"], env))
+    except Exception as exc:  # noqa: BLE001
+        out["spot"] = {"ok": False, "message": str(exc)}
+    out["app_orders"] = get_db().execute("""
+        SELECT id, created_at, market, symbol, direction, entry_type, amount_usdt, leverage,
+               avg_price, entry_price, target, stop, status
+        FROM trade_orders WHERE user_id = ? AND env = ? ORDER BY id DESC LIMIT 20
+    """, (user["id"], env))
+    _init_actions()
+    out["actions"] = get_db().execute("""
+        SELECT created_at, market, symbol, action, ok, error FROM trade_actions
+        WHERE user_id = ? AND env = ? ORDER BY id DESC LIMIT 20
+    """, (user["id"], env))
+    _snap_cache[ck] = (time.time(), out)
+    return jsonify(out)
+
+
+def _action(user, body, name, fn):
+    """Ortak müdahale akışı: ortam, anahtar, canlı onayı, kilit, kayıt."""
+    env = _env_for(user, body.get("env"))
+    market = body.get("market")
+    symbol = str(body.get("symbol") or "").upper()
+    if market not in ("spot", "futures") or not symbol:
+        return jsonify({"ok": False, "message": "Eksik bilgi."}), 400
+    if body.get("confirmed") is not True:
+        return jsonify({"ok": False, "message": "İşlem onaylanmadı."}), 400
+    if env == "live" and (body.get("confirm_text") or "").strip().upper() != "ONAYLA":
+        return jsonify({"ok": False, "message": "Canlı hesapta işlem için ONAYLA yazın."}), 400
+    lock = _user_locks.setdefault(user["id"], threading.Lock())
+    if not lock.acquire(blocking=False):
+        return jsonify({"ok": False, "message": "Önceki işleminiz hâlâ sürüyor."}), 409
+    try:
+        try:
+            client = _client_or_error(user, env)
+            result = fn(client, env, market, symbol)
+        except (binance_client.PlanError, binance_client.BinanceError, secretbox.SecretBoxError) as exc:
+            _record_action(user, env, market, symbol, name, body, False, str(exc))
+            return jsonify({"ok": False, "message": str(exc)}), 400
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Panel işlemi hatası")
+            _record_action(user, env, market, symbol, name, body, False, str(exc))
+            return jsonify({"ok": False, "message": f"İşlem yapılamadı: {exc}"}), 502
+        _record_action(user, env, market, symbol, name, {"request": body, "result": result},
+                       result.get("ok", True), result.get("critical"))
+        _snap_cache.pop((user["id"], env), None)
+        return jsonify({"ok": bool(result.get("ok", True)), "result": result,
+                        "message": result.get("critical")})
+    finally:
+        lock.release()
+
+
+@bp.route("/api/trades/close", methods=["POST"])
+@_guard
+def api_trades_close(user):
+    body = request.get_json(silent=True) or {}
+
+    def fn(client, env, market, symbol):
+        if market == "futures":
+            return binance_account.close_futures(client, symbol, str(body.get("position_side") or "BOTH").upper())
+        return binance_account.close_spot(client, symbol)
+    return _action(user, body, "KAPAT", fn)
+
+
+@bp.route("/api/trades/cancel", methods=["POST"])
+@_guard
+def api_trades_cancel(user):
+    body = request.get_json(silent=True) or {}
+    kind = body.get("kind")
+    if kind not in ("order", "algo", "list") or body.get("id") in (None, ""):
+        return jsonify({"ok": False, "message": "Geçersiz emir."}), 400
+
+    def fn(client, env, market, symbol):
+        binance_account.cancel(client, market, kind, symbol, body["id"])
+        return {"ok": True, "steps": [{"name": "Emir iptal edildi", "ok": True}]}
+    return _action(user, body, "İPTAL", fn)
+
+
+@bp.route("/api/trades/tpsl", methods=["POST"])
+@_guard
+def api_trades_tpsl(user):
+    body = request.get_json(silent=True) or {}
+
+    def fn(client, env, market, symbol):
+        if market == "futures":
+            return binance_account.edit_futures_tpsl(client, symbol, str(body.get("position_side") or "BOTH").upper(),
+                                                     body.get("target"), body.get("stop"))
+        return binance_account.edit_spot_tpsl(client, symbol, body.get("target"), body.get("stop"))
+    return _action(user, body, "HEDEF-STOP", fn)

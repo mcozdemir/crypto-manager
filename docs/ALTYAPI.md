@@ -4,7 +4,7 @@
 > etkileyen her değişiklikte aynı commit içinde güncellenir. Ürün kuralları için:
 > [`KURALLAR.md`](KURALLAR.md).
 >
-> Son güncelleme: **v1.4.1** · 2026-09-30
+> Son güncelleme: **v1.5.0** · 2026-09-30
 
 ## 1. Genel bakış
 
@@ -38,7 +38,9 @@ flowchart LR
 | `app.py` | Flask uygulaması: sayfalar, JSON API, arka plan iş parçacıkları (tarama, backtest, coin arama) |
 | `auth.py` | Giriş/çıkış, TOTP doğrulama, kaba kuvvet koruması, güvenlik başlıkları |
 | `profiles.py` | Profil sayfası ve API'si: kullanıcı adı, profil fotoğrafı, işlem varsayılanları, Binance API anahtarları |
-| `trading.py` | Emir API'si: bağlam, canlı fiyat, emir özeti (önizleme), gönderme, emir geçmişi |
+| `trading.py` | Emir API'si (bağlam, canlı fiyat, önizleme, gönderme, geçmiş) ve İşlemlerim API'si (anlık görüntü, kapat, iptal, hedef/stop) |
+| `binance_account.py` | Kullanıcının Binance hesabını okuma (pozisyon, emir, Algo emir, bakiye, gerçekleşen K/Z) ve müdahale (kapat, iptal, hedef/stop düzenle) |
+| `templates/trades.html` | İşlemlerim sayfası (`/trades`) |
 | `binance_client.py` | İmzalı Binance istemcisi (Spot + USDT-M Vadeli, Demo + Canlı), sembol kuralları, emir planı ve gönderimi |
 | `secretbox.py` | API anahtarlarının şifrelenmesi (Fernet, `APP_ENCRYPTION_KEY`) |
 | `templates/profile.html` | Profil sayfası (profil, işlem ayarları, Binance API, Emirlerim) |
@@ -151,6 +153,10 @@ sequenceDiagram
 `protected`, `signal_ref`, `result_json` (Binance yanıt özeti), `error`, `app_version`.
 İndeks: `(user_id, created_at)`.
 
+**`trade_actions`** — İşlemlerim panelindeki her müdahale: `created_at`, `user_id`, `username`,
+`env`, `market`, `symbol`, `action` (`KAPAT` / `İPTAL` / `HEDEF-STOP`), `detail_json` (istek +
+Binance sonucu), `ok`, `error`, `app_version`. İndeks: `(user_id, created_at)`.
+
 Şema değişiklikleri uygulama açılışında otomatik göç (migration) ile yapılır
 (`journal.init_db`, `ALTER TABLE ... ADD COLUMN`); profil/emir tabloları ilk kullanımda
 `CREATE TABLE IF NOT EXISTS` ile oluşur. Elle işlem gerekmez.
@@ -180,7 +186,7 @@ sequenceDiagram
 | CoinGecko | Piyasa rejimi, coin temel verileri | `/global`, `/coins/markets`, `/coins/{id}`, `/search` | `APP_COINGECKO_API_KEY` (Demo, dakikada 100 istek). Anahtarsız kullanım paylaşılan IP'lerde 403/429 verir |
 | GitHub | Proje deposunun son güncellemesi | `/repos/{owner}/{repo}`, `/orgs/{org}/repos` | Anahtarsız saatte 60 istek; isteğe bağlı `APP_GITHUB_API_TOKEN` |
 | DefiLlama | TVL, ücret geliri | `/protocols`, `/overview/fees` | Anahtarsız |
-| Binance işlem (imzalı) | Hesap/bakiye, anahtar izinleri, emir açma | Spot: `/api/v3/account`, `/api/v3/order`, `/api/v3/orderList/oco`, `/api/v3/orderList/otoco`, `/sapi/v1/account/apiRestrictions` (yalnızca canlı) · Vadeli: `/fapi/v2/balance`, `/fapi/v1/positionSide/dual`, `/fapi/v1/marginType`, `/fapi/v1/leverage`, `/fapi/v1/order`, `/fapi/v1/algoOrder` | Kullanıcının kendi anahtarı (HMAC-SHA256). Canlı: `api.binance.com`, `fapi.binance.com`; Demo: `demo-api.binance.com`, `demo-fapi.binance.com` |
+| Binance işlem (imzalı) | Hesap/bakiye, anahtar izinleri, emir açma | Spot: `/api/v3/account`, `/api/v3/order`, `/api/v3/orderList/oco`, `/api/v3/orderList/otoco`, `/sapi/v1/account/apiRestrictions` (yalnızca canlı) · Vadeli: `/fapi/v2/balance`, `/fapi/v1/positionSide/dual`, `/fapi/v1/marginType`, `/fapi/v1/leverage`, `/fapi/v1/order` (+DELETE), `/fapi/v1/algoOrder` (+DELETE), `/fapi/v1/openOrders`, `/fapi/v1/openAlgoOrders`, `/fapi/v2/positionRisk`, `/fapi/v1/income` · Spot ek: `/api/v3/openOrders` (+DELETE), `/api/v3/orderList` (DELETE) | Kullanıcının kendi anahtarı (HMAC-SHA256). Canlı: `api.binance.com`, `fapi.binance.com`; Demo: `demo-api.binance.com`, `demo-fapi.binance.com` |
 | Turso | Veritabanı | `https://<db>.turso.io/v2/pipeline` | `APP_TURSO_TECH_DB_URL`, `APP_TURSO_TECH_TOKEN` |
 
 ## 6. Ortam değişkenleri
@@ -197,6 +203,7 @@ sequenceDiagram
 | `GITHUB_USERNAME`, `GITHUB_CRYPTO_MANAGER_TOKEN` | Hayır | Yalnızca geliştirici `.env` | Mac'ten `git push` yetkisi (uygulama kullanmaz) |
 | `APP_NAME` | Hayır | Render | Başlıktaki etiket |
 | `PYTHON_VERSION`, `MPLCONFIGDIR` | — | Render | Çalışma ortamı |
+| `TZ` | — | Render (`Europe/Istanbul`) | Kayıt saatlerinin Mac ile aynı (Türkiye) saat diliminde olması; imza/TOTP gibi zaman damgaları etkilenmez (UTC epoch) |
 | `RENDER`, `RENDER_GIT_COMMIT` | — | Render (otomatik) | HTTPS/güvenli çerez modu, sürüm commit'i |
 | `SCANNER_HOST`, `SCANNER_PORT` | Hayır | Yerel | `ayarlar.py` değerlerini geçici geçersiz kılar |
 

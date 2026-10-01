@@ -62,6 +62,7 @@
 <header>
   <a href="/">← Panele dön</a>
   <h1>👤 Profil ve ayarlar</h1>
+  <a href="/trades">📈 İşlemlerim</a>
   <form method="post" action="/logout" style="margin-left:auto;"><button class="secondary" type="submit">Çıkış</button></form>
 </header>
 
@@ -118,7 +119,7 @@
 
   <!-- Emirlerim -->
   <section id="orders">
-    <h2>Emirlerim <button class="secondary" style="margin-left:auto;" onclick="loadOrders()">Yenile</button></h2>
+    <h2>Emirlerim <a href="/trades" style="margin-left:auto; color:var(--blue); font-size:13px; text-decoration:none;">📈 Canlı pozisyonlar → İşlemlerim</a> <button class="secondary" onclick="loadOrders()">Yenile</button></h2>
     <div id="ordersWrap" class="scroll"><div class="muted">Yükleniyor...</div></div>
   </section>
 </main>
